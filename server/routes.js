@@ -172,8 +172,8 @@ router.post('/merchant/subscribe', authMiddleware, async (req, res) => {
 
     await db.run(`
       INSERT INTO invoices (
-        id, merchant_id, customer_name, customer_email, base_amount, unique_code, total_amount, payment_method, status, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'MANUAL_TRANSFER', 'PENDING', ?)
+        id, merchant_id, customer_name, customer_email, base_amount, unique_code, total_amount, payment_method, payment_url, status, expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [invoiceId, req.user.id, `Langganan ${targetPlan.name} (${req.user.username})`, req.user.email || 'billing@merchant.com', targetPlan.price, uniqueCode, totalAmount, expiresAt]);
 
     const created = await db.get('SELECT * FROM invoices WHERE id = ?', [invoiceId]);
@@ -219,8 +219,8 @@ router.post('/gateway/invoices', apiKeyMiddleware, async (req, res) => {
     await db.run(`
       INSERT INTO invoices (
         id, merchant_id, customer_name, customer_email, base_amount, unique_code, total_amount, payment_method, payment_url, status, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
-    `, [invoiceId, merchant.id, customer_name || 'Pelanggan Toko', customer_email || '', Number(amount), uniqueCode, totalAmount, payment_method, paymentUrl, expiresAt]);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [invoiceId, merchant.id, customer_name || 'Pelanggan Toko', customer_email || '', Number(amount), uniqueCode, totalAmount, payment_method, paymentUrl, 'PENDING', expiresAt]);
 
     await db.run('UPDATE users SET used_quota = used_quota + 1 WHERE id = ?', [merchant.id]);
 
@@ -434,8 +434,8 @@ router.post('/invoices', authMiddleware, async (req, res) => {
     await db.run(`
       INSERT INTO invoices (
         id, merchant_id, customer_name, customer_email, base_amount, unique_code, total_amount, payment_method, payment_url, status, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
-    `, [invoiceId, req.user.id, customer_name || 'Pelanggan Umum', customer_email || '', Number(base_amount), uniqueCode, totalAmount, payment_method, paymentUrl, expiresAt]);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [invoiceId, req.user.id, customer_name || 'Pelanggan Umum', customer_email || '', Number(base_amount), uniqueCode, totalAmount, payment_method, paymentUrl, 'PENDING', expiresAt]);
 
     await db.run('UPDATE users SET used_quota = used_quota + 1 WHERE id = ?', [req.user.id]);
     const created = await db.get('SELECT * FROM invoices WHERE id = ?', [invoiceId]);
@@ -618,3 +618,4 @@ router.post('/simulate/notification', authMiddleware, async (req, res) => {
 });
 
 export default router;
+

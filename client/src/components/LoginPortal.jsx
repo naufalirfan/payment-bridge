@@ -223,29 +223,47 @@ export default function LoginPortal({ onLoginSuccess, isDarkMode, onToggleTheme 
                     </Button>
 
                     {/* Quick Demo Credentials Autofill */}
-                    <div 
-                      onClick={handleFillDemo}
-                      style={{ 
-                        marginTop: 18, 
-                        padding: "10px 14px", 
-                        borderRadius: 8, 
-                        background: isDarkMode ? "#1F2937" : "#F8FAFC", 
-                        border: `1px dashed ${isDarkMode ? '#374151' : '#CBD5E1'}`,
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        transition: "all 0.2s ease"
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <KeyOutlined style={{ color: "#2563EB" }} />
-                        <div style={{ fontSize: 12 }}>
-                          <span style={{ fontWeight: 600 }}>Default Admin: </span>
-                          <code>admin</code> / <code>admin123</code>
+                    <div style={{ marginTop: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: isDarkMode ? '#94A3B8' : '#64748B', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <KeyOutlined style={{ color: '#2563EB' }} /> Akun Demo Siap Pakai (1-Klik Isi):
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div 
+                          onClick={() => loginForm.setFieldsValue({ username: 'admin', password: 'admin123' })}
+                          style={{ 
+                            padding: '8px 10px', 
+                            borderRadius: 8, 
+                            background: isDarkMode ? '#1E293B' : '#F1F5F9', 
+                            border: '1px solid ' + (isDarkMode ? '#334155' : '#CBD5E1'),
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            textAlign: 'left'
+                          }}
+                        >
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#2563EB' }}>👑 Master Admin</div>
+                          <div style={{ fontSize: 11, color: isDarkMode ? '#CBD5E1' : '#475569' }}>
+                            <code>admin</code> / <code>admin123</code>
+                          </div>
+                        </div>
+
+                        <div 
+                          onClick={() => loginForm.setFieldsValue({ username: 'demo_merchant', password: 'merchant123' })}
+                          style={{ 
+                            padding: '8px 10px', 
+                            borderRadius: 8, 
+                            background: isDarkMode ? '#1E293B' : '#F1F5F9', 
+                            border: '1px solid ' + (isDarkMode ? '#334155' : '#CBD5E1'),
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            textAlign: 'left'
+                          }}
+                        >
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#10B981' }}>🏪 Demo Merchant</div>
+                          <div style={{ fontSize: 11, color: isDarkMode ? '#CBD5E1' : '#475569' }}>
+                            <code>demo_merchant</code> / <code>merchant123</code>
+                          </div>
                         </div>
                       </div>
-                      <span style={{ fontSize: 11, color: "#2563EB", fontWeight: 600 }}>Klik Isi</span>
                     </div>
                   </Form>
                 )

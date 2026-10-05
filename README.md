@@ -12,12 +12,19 @@
 ---
 
 ## 🌐 Live Demo & Production
-* **Web Dashboard & Login Portal**: [https://payment-bridge-ecru.vercel.app](https://payment-bridge-ecru.vercel.app)
+* **Live App URL**: [https://payment-bridge-ecru.vercel.app](https://payment-bridge-ecru.vercel.app)
 * **API Healthcheck**: [https://payment-bridge-ecru.vercel.app/health](https://payment-bridge-ecru.vercel.app/health)
 
-> **🔑 Kredensial Default Portal Login:**
-> - **Username**: `admin`
-> - **Password**: `admin123` *(Dapat diganti melalui menu profil admin)*
+### 🔑 Akun Demo Siap Pakai (Live Demo Credentials)
+
+Anda dapat langsung mencoba semua fitur tanpa instalasi lokal menggunakan salah satu akun demo berikut:
+
+| Role | Username | Password | Akses & Fitur yang Dapat Dicoba |
+| :--- | :--- | :--- | :--- |
+| **👑 Master Admin** | `admin` | `admin123` | Akses penuh manajemen platform: Pantau semua mutasi perbankan, listener devices Android, monitoring log webhook global, pengaturan integrasi DOKU & Webhook pusat. |
+| **🏪 Demo Merchant** | `demo_merchant` | `merchant123` | Akses Merchant SaaS (Pro Tier): Buat invoice tagihan, kelola *API Key* & *Merchant Secret*, simulasi checkout pelanggan, akses tab dokumentasi REST API, dan simulasi paket langganan. |
+
+> 💡 **Tip:** Di halaman Login Portal, terdapat tombol **1-Klik Isi Demo** (*Master Admin* & *Demo Merchant*) untuk langsung mengisi form secara instan. Anda juga dapat mendaftar akun baru secara mandiri melalui tab **Daftar Merchant (Free Trial 14 Hari)**.
 
 ---
 
