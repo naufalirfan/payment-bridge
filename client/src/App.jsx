@@ -9,6 +9,9 @@ import {
   ConfigProvider, 
   Tooltip, 
   Drawer,
+  Dropdown,
+  Avatar,
+  message,
   theme
 } from "antd";
 import { 
@@ -21,8 +24,12 @@ import {
   ThunderboltOutlined,
   PlusOutlined,
   MenuOutlined,
-  SunOutlined,
-  MoonOutlined
+  SunOutlined, 
+  MoonOutlined,
+  UserOutlined,
+  LogoutOutlined,
+  KeyOutlined,
+  CloudServerOutlined
 } from "@ant-design/icons";
 
 import DashboardTab from "./components/DashboardTab";
@@ -35,6 +42,8 @@ import SimulatorModal from "./components/SimulatorModal";
 import CreateInvoiceModal from "./components/CreateInvoiceModal";
 import RawPayloadDrawer from "./components/RawPayloadDrawer";
 import ManualMatchModal from "./components/ManualMatchModal";
+import LoginPortal from "./components/LoginPortal";
+import ChangePasswordModal from "./components/ChangePasswordModal";
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -46,7 +55,14 @@ export default function App() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Dark Mode state with persistence
+  // Authentication State
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem("pb_user");
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [token, setToken] = useState(() => localStorage.getItem("pb_token") || "");
+
+  // Dark Mode State
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem("pb_theme");
     if (saved) return saved === "dark";
@@ -62,8 +78,25 @@ export default function App() {
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [createInvoiceOpen, setCreateInvoiceOpen] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [changePassOpen, setChangePassOpen] = useState(false);
   const [rawDrawerMutation, setRawDrawerMutation] = useState(null);
   const [manualMatchMutation, setManualMatchMutation] = useState(null);
+
+  const handleLoginSuccess = (userData, userToken) => {
+    setUser(userData);
+    setToken(userToken);
+    localStorage.setItem("pb_user", JSON.stringify(userData));
+    localStorage.setItem("pb_token", userToken);
+    message.success(`Selamat datang kembali, ${userData.username}!`);
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setToken("");
+    localStorage.removeItem("pb_user");
+    localStorage.removeItem("pb_token");
+    message.info("Anda telah keluar dari sistem.");
+  };
 
   const fetchAllData = async () => {
     try {
@@ -82,10 +115,12 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchAllData();
-    const interval = setInterval(fetchAllData, 8000);
-    return () => clearInterval(interval);
-  }, []);
+    if (user && token) {
+      fetchAllData();
+      const interval = setInterval(fetchAllData, 8000);
+      return () => clearInterval(interval);
+    }
+  }, [user, token]);
 
   const activeDeviceCount = (stats?.devices || []).filter(d => 
     d.last_ping_at && (new Date().getTime() - new Date(d.last_ping_at).getTime() < 5 * 60 * 1000)
@@ -132,6 +167,32 @@ export default function App() {
       key: "webhooks",
       icon: <ApiOutlined style={{ fontSize: 16 }} />,
       label: "Webhook Settings"
+    }
+  ];
+
+  const userMenuItems = [
+    {
+      key: "user-info",
+      label: (
+        <div style={{ padding: "4px 0" }}>
+          <div style={{ fontWeight: 700, fontSize: 13.5 }}>{user?.username || "Admin"}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>Fintech Administrator</div>
+        </div>
+      ),
+      disabled: true
+    },
+    { type: "divider" },
+    {
+      key: "change-password",
+      icon: <KeyOutlined />,
+      label: "Ubah Password",
+      onClick: () => setChangePassOpen(true)
+    },
+    {
+      key: "logout",
+      icon: <LogoutOutlined style={{ color: "#EF4444" }} />,
+      label: <span style={{ color: "#EF4444" }}>Keluar</span>,
+      onClick: handleLogout
     }
   ];
 
@@ -183,48 +244,61 @@ export default function App() {
     }
   };
 
+  const customTheme = {
+    algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+    token: {
+      colorPrimary: "#2563EB",
+      colorInfo: "#2563EB",
+      colorSuccess: "#10B981",
+      colorWarning: "#F59E0B",
+      colorError: "#EF4444",
+      colorTextBase: isDarkMode ? "#F9FAFB" : "#0F172A",
+      fontFamily: "Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif",
+      borderRadius: 8,
+      colorBgContainer: isDarkMode ? "#111827" : "#FFFFFF",
+      colorBgElevated: isDarkMode ? "#1F2937" : "#FFFFFF",
+      colorBgLayout: isDarkMode ? "#0B0F19" : "#F8FAFC",
+      colorBorder: isDarkMode ? "#1F2937" : "#E2E8F0",
+      colorBorderSecondary: isDarkMode ? "#374151" : "#F1F5F9",
+      fontSize: 14
+    },
+    components: {
+      Menu: {
+        itemBorderRadius: 8,
+        itemMarginInline: 8,
+        itemSelectedBg: isDarkMode ? "#1E3A8A" : "#EFF6FF",
+        itemSelectedColor: isDarkMode ? "#93C5FD" : "#2563EB"
+      },
+      Button: {
+        borderRadius: 8,
+        controlHeight: 38,
+        fontWeight: 600
+      },
+      Table: {
+        headerBg: isDarkMode ? "#1F2937" : "#F8FAFC",
+        headerBorderRadius: 8
+      },
+      Card: {
+        borderRadiusLG: 12
+      }
+    }
+  };
+
+  // If not authenticated, display Login Portal
+  if (!user || !token) {
+    return (
+      <ConfigProvider theme={customTheme}>
+        <LoginPortal 
+          onLoginSuccess={handleLoginSuccess}
+          isDarkMode={isDarkMode}
+          onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+        />
+      </ConfigProvider>
+    );
+  }
+
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: {
-          colorPrimary: "#2563EB",
-          colorInfo: "#2563EB",
-          colorSuccess: "#10B981",
-          colorWarning: "#F59E0B",
-          colorError: "#EF4444",
-          colorTextBase: isDarkMode ? "#F9FAFB" : "#0F172A",
-          fontFamily: "Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif",
-          borderRadius: 8,
-          colorBgContainer: isDarkMode ? "#111827" : "#FFFFFF",
-          colorBgElevated: isDarkMode ? "#1F2937" : "#FFFFFF",
-          colorBgLayout: isDarkMode ? "#0B0F19" : "#F8FAFC",
-          colorBorder: isDarkMode ? "#1F2937" : "#E2E8F0",
-          colorBorderSecondary: isDarkMode ? "#374151" : "#F1F5F9",
-          fontSize: 14
-        },
-        components: {
-          Menu: {
-            itemBorderRadius: 8,
-            itemMarginInline: 8,
-            itemSelectedBg: isDarkMode ? "#1E3A8A" : "#EFF6FF",
-            itemSelectedColor: isDarkMode ? "#93C5FD" : "#2563EB"
-          },
-          Button: {
-            borderRadius: 8,
-            controlHeight: 38,
-            fontWeight: 600
-          },
-          Table: {
-            headerBg: isDarkMode ? "#1F2937" : "#F8FAFC",
-            headerBorderRadius: 8
-          },
-          Card: {
-            borderRadiusLG: 12
-          }
-        }
-      }}
-    >
+    <ConfigProvider theme={customTheme}>
       <Layout style={{ minHeight: "100vh", background: "var(--color-bg)" }}>
         {/* Desktop Sider */}
         <Sider
@@ -258,6 +332,17 @@ export default function App() {
             onClick={({ key }) => setSelectedKey(key)}
             style={{ borderRight: 0, padding: "14px 4px", background: "transparent" }}
           />
+
+          {/* Sider Footer: Turso Cloud Status */}
+          <div style={{ position: "absolute", bottom: 16, left: 16, right: 16, padding: "10px 12px", background: isDarkMode ? "#1F2937" : "#F8FAFC", borderRadius: 8, border: `1px solid ${isDarkMode ? '#374151' : '#E2E8F0'}`, fontSize: 11.5 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: "#2563EB" }}>
+              <CloudServerOutlined />
+              <span>Turso LibSQL Cloud</span>
+            </div>
+            <div style={{ color: "var(--color-text-muted)", marginTop: 2, fontSize: 10.5 }}>
+              Distributed Edge Replica (sin/tokyo)
+            </div>
+          </div>
         </Sider>
 
         {/* Mobile Navigation Drawer */}
@@ -302,7 +387,7 @@ export default function App() {
             </div>
 
             <Space size={12}>
-              {/* Dark Mode Toggle Button */}
+              {/* Dark Mode Toggle */}
               <Tooltip title={isDarkMode ? "Ganti ke Mode Terang" : "Ganti ke Mode Malam"}>
                 <Button 
                   shape="circle"
@@ -318,6 +403,7 @@ export default function App() {
                 />
               </Tooltip>
 
+              {/* Active Device Indicator */}
               <Tooltip title={activeDeviceCount > 0 ? activeDeviceCount + " Smartphone Android aktif terhubung" : "Tidak ada smartphone Android yang mengirim heartbeat (< 5 mnt)"}>
                 <div 
                   onClick={() => setSelectedKey("devices")}
@@ -359,6 +445,18 @@ export default function App() {
               >
                 Buat Invoice
               </Button>
+
+              {/* User Profile Dropdown */}
+              <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" arrow>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 8px", borderRadius: 8, border: `1px solid ${isDarkMode ? '#374151' : '#E2E8F0'}` }}>
+                  <Avatar size={28} style={{ backgroundColor: "#2563EB", fontWeight: 700 }}>
+                    {user?.username ? user.username[0].toUpperCase() : "A"}
+                  </Avatar>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                    {user?.username || "Admin"}
+                  </span>
+                </div>
+              </Dropdown>
             </Space>
           </Header>
 
@@ -381,6 +479,12 @@ export default function App() {
         open={createInvoiceOpen}
         onClose={() => setCreateInvoiceOpen(false)}
         onCreated={fetchAllData}
+      />
+
+      <ChangePasswordModal
+        open={changePassOpen}
+        onClose={() => setChangePassOpen(false)}
+        token={token}
       />
 
       <RawPayloadDrawer

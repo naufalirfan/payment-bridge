@@ -1,16 +1,20 @@
 import crypto from 'node:crypto';
 import { db } from './db.js';
 
-export function getDokuConfig() {
-  const getSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
+export async function getDokuConfig() {
+  const getVal = async (k, def = '') => {
+    const row = await db.get('SELECT value FROM settings WHERE key = ?', [k]);
+    return row ? row.value : def;
+  };
+
+  const isProd = (await getVal('doku_is_production', '0')) === '1';
+
   return {
-    enabled: getSetting.get('doku_enabled')?.value === '1',
-    clientId: getSetting.get('doku_client_id')?.value || '',
-    secretKey: getSetting.get('doku_secret_key')?.value || '',
-    isProduction: getSetting.get('doku_is_production')?.value === '1',
-    baseUrl: getSetting.get('doku_is_production')?.value === '1'
-      ? 'https://api.doku.com'
-      : 'https://api-sandbox.doku.com'
+    enabled: (await getVal('doku_enabled', '1')) === '1',
+    clientId: await getVal('doku_client_id', ''),
+    secretKey: await getVal('doku_secret_key', ''),
+    isProduction: isProd,
+    baseUrl: isProd ? 'https://api.doku.com' : 'https://api-sandbox.doku.com'
   };
 }
 
@@ -68,7 +72,7 @@ export function verifyDokuNotificationSignature(headers, rawBody, secretKey) {
  * Create DOKU Checkout Session / Payment URL
  */
 export async function createDokuCheckoutSession({ invoiceId, amount, customerName, customerEmail, expiryMinutes = 1440 }) {
-  const config = getDokuConfig();
+  const config = await getDokuConfig();
   if (!config.clientId || !config.secretKey) {
     throw new Error('DOKU Client ID dan Secret Key belum dikonfigurasi di Payment Bridge.');
   }

@@ -2,17 +2,16 @@ import crypto from 'node:crypto';
 import { db } from './db.js';
 import { dispatchWebhook } from './dispatcher.js';
 
-export function matchAndProcessMutation(device_id, rawPayload, parsed) {
+export async function matchAndProcessMutation(device_id, rawPayload, parsed) {
   const { amount, detectedBank, isCredit, senderName } = parsed;
   const mutationId = crypto.randomUUID();
 
   // If outgoing transfer or zero amount, store as unmatched mutation
   if (!isCredit || amount <= 0) {
-    const insertMutation = db.prepare(`
+    await db.run(`
       INSERT INTO mutations (id, device_id, raw_payload, amount, sender_name, matched_invoice_id, package_name, app_title, received_at)
       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, datetime('now'))
-    `);
-    insertMutation.run(
+    `, [
       mutationId,
       device_id,
       JSON.stringify(rawPayload),
@@ -20,37 +19,34 @@ export function matchAndProcessMutation(device_id, rawPayload, parsed) {
       senderName || null,
       rawPayload.package_name || null,
       rawPayload.title || detectedBank
-    );
+    ]);
     return { mutationId, matched: false, invoice: null };
   }
 
   // Find exact matching pending active invoice
-  const findInvoice = db.prepare(`
+  const matchedInvoice = await db.get(`
     SELECT * FROM invoices 
     WHERE status = 'PENDING' 
       AND total_amount = ? 
       AND expires_at > datetime('now')
     ORDER BY created_at ASC 
     LIMIT 1
-  `);
-
-  const matchedInvoice = findInvoice.get(amount);
+  `, [amount]);
 
   let matchedInvoiceId = null;
 
   if (matchedInvoice) {
     // Atomic status update to prevent race conditions
-    const updateRes = db.prepare("UPDATE invoices SET status = 'PAID' WHERE id = ? AND status = 'PENDING'").run(matchedInvoice.id);
+    const updateRes = await db.run("UPDATE invoices SET status = 'PAID' WHERE id = ? AND status = 'PENDING'", [matchedInvoice.id]);
 
     if (updateRes.changes > 0) {
       matchedInvoiceId = matchedInvoice.id;
 
       // Save mutation record with matched invoice
-      const insertMutation = db.prepare(`
+      await db.run(`
         INSERT INTO mutations (id, device_id, raw_payload, amount, sender_name, matched_invoice_id, package_name, app_title, received_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      `);
-      insertMutation.run(
+      `, [
         mutationId,
         device_id,
         JSON.stringify(rawPayload),
@@ -59,7 +55,7 @@ export function matchAndProcessMutation(device_id, rawPayload, parsed) {
         matchedInvoiceId,
         rawPayload.package_name || null,
         rawPayload.title || detectedBank
-      );
+      ]);
 
       // Fire webhook dispatch asynchronously
       setTimeout(async () => {
@@ -79,11 +75,10 @@ export function matchAndProcessMutation(device_id, rawPayload, parsed) {
   }
 
   // Unmatched mutation (or race condition handled)
-  const insertMutation = db.prepare(`
+  await db.run(`
     INSERT INTO mutations (id, device_id, raw_payload, amount, sender_name, matched_invoice_id, package_name, app_title, received_at)
     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, datetime('now'))
-  `);
-  insertMutation.run(
+  `, [
     mutationId,
     device_id,
     JSON.stringify(rawPayload),
@@ -91,16 +86,16 @@ export function matchAndProcessMutation(device_id, rawPayload, parsed) {
     senderName || null,
     rawPayload.package_name || null,
     rawPayload.title || detectedBank
-  );
+  ]);
 
   return { mutationId, matched: false, invoice: null };
 }
 
-export function manualMatchMutation(mutationId, invoiceId) {
-  const mutation = db.prepare('SELECT * FROM mutations WHERE id = ?').get(mutationId);
+export async function manualMatchMutation(mutationId, invoiceId) {
+  const mutation = await db.get('SELECT * FROM mutations WHERE id = ?', [mutationId]);
   if (!mutation) throw new Error('Mutation not found');
 
-  const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId);
+  const invoice = await db.get('SELECT * FROM invoices WHERE id = ?', [invoiceId]);
   if (!invoice) throw new Error('Invoice not found');
 
   if (invoice.status === 'PAID') {
@@ -108,13 +103,13 @@ export function manualMatchMutation(mutationId, invoiceId) {
   }
 
   // Atomic update invoice status to PAID
-  const updateRes = db.prepare("UPDATE invoices SET status = 'PAID' WHERE id = ? AND status = 'PENDING'").run(invoiceId);
+  const updateRes = await db.run("UPDATE invoices SET status = 'PAID' WHERE id = ? AND status = 'PENDING'", [invoiceId]);
   if (updateRes.changes === 0 && invoice.status !== 'PENDING') {
     throw new Error('Invoice status could not be transitioned to PAID');
   }
 
   // Link mutation
-  db.prepare('UPDATE mutations SET matched_invoice_id = ? WHERE id = ?').run(invoiceId, mutationId);
+  await db.run('UPDATE mutations SET matched_invoice_id = ? WHERE id = ?', [invoiceId, mutationId]);
 
   // Trigger outbound webhook
   setTimeout(async () => {

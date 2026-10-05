@@ -1,24 +1,35 @@
 # 🌉 Payment Bridge — Hybrid Fintech Gateway & Inbound Notification Processor
 
 [![Vercel Deployment](https://img.shields.io/badge/Deployment-Vercel-black?style=for-the-badge&logo=vercel)](https://payment-bridge-ecru.vercel.app)
+[![Turso LibSQL](https://img.shields.io/badge/Database-Turso%20LibSQL%20Cloud-00E599?style=for-the-badge&logo=sqlite)](https://turso.tech/)
 [![React](https://img.shields.io/badge/Frontend-React%2018%20%7C%20Vite-61DAFB?style=for-the-badge&logo=react)](https://reactjs.org/)
 [![Ant Design](https://img.shields.io/badge/UI%20Library-Ant%20Design%205-0170FE?style=for-the-badge&logo=antdesign)](https://ant.design/)
 [![Node.js](https://img.shields.io/badge/Backend-Node.js%2022%20%7C%20Express-339933?style=for-the-badge&logo=nodedotjs)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
-> **Payment Bridge** adalah sistem hybrid gateway fintech modern yang menghubungkan penangkapan notifikasi mutasi perbankan/e-wallet real-time via **Payhooks Android** dan **DOKU Payment Gateway (Jokul API V2)**, melakukan parsing regex multi-bank cerdas, pencocokan invoice otomatis (*unique code anti-collision*), serta men-dispatch webhook terenkripsi HMAC SHA-256 ke server merchant.
+> **Payment Bridge** adalah sistem hybrid gateway fintech modern yang menghubungkan penangkapan notifikasi mutasi perbankan/e-wallet real-time via **Payhooks Android** dan **DOKU Payment Gateway (Jokul API V2)**, ditenagai oleh **Turso Distributed LibSQL Cloud Database**, otentikasi portal login terenkripsi JWT, pencocokan invoice otomatis (*unique code anti-collision*), serta dispatcher webhook terenkripsi HMAC SHA-256 ke server merchant.
 
 ---
 
 ## 🌐 Live Demo & Production
-* **Web Dashboard**: [https://payment-bridge-ecru.vercel.app](https://payment-bridge-ecru.vercel.app)
+* **Web Dashboard & Login Portal**: [https://payment-bridge-ecru.vercel.app](https://payment-bridge-ecru.vercel.app)
 * **API Healthcheck**: [https://payment-bridge-ecru.vercel.app/health](https://payment-bridge-ecru.vercel.app/health)
+
+> **🔑 Kredensial Default Portal Login:**
+> - **Username**: `admin`
+> - **Password**: `admin123` *(Dapat diganti melalui menu profil admin)*
 
 ---
 
 ## 📸 Preview Antarmuka
 
-| Light Mode | Dark Mode (Mode Malam) |
+### 1. Portal Login (Authentication)
+| Login Light Mode | Login Dark Mode |
+| :---: | :---: |
+| ![Login Portal Light](screenshots/login_portal.png) | ![Login Portal Dark](screenshots/login_portal_dark.png) |
+
+### 2. Fintech Dashboard & Analytics
+| Dashboard Light Mode | Dashboard Dark Mode (Mode Malam) |
 | :---: | :---: |
 | ![Light Mode Dashboard](screenshots/dashboard_preview.png) | ![Dark Mode Dashboard](screenshots/dashboard_dark.png) |
 
@@ -26,6 +37,8 @@
 
 ## ✨ Fitur Unggulan
 
+- 🔐 **Portal Login & Keamanan Terenkripsi**: Sistem login berbasis JWT & password hashing (SHA-256 salt / bcrypt) dengan modal ganti password langsung dari UI.
+- 🗄️ **Turso Distributed Cloud Database**: Integrasi penuh dengan database **Turso (LibSQL Cloud)** di edge serverless global dengan latensi rendah dan persistensi permanen.
 - ⚡ **Ultra-Fast Inbound Ingestion (<150ms)**: Merespons webhook inbound dari Android Payhooks & DOKU secara non-blocking dan memproses pencocokan di background queue.
 - 📱 **Multi-Bank & E-Wallet Regex Parser**: Mendukung parsing otomatis mutasi dari BCA, Mandiri (Livin'), BRI (BRImo), BNI (wondr), BSI (BYOND), SeaBank, Bank Jago, Jenius BTPN, DANA, OVO, GoPay, ShopeePay, LinkAja, dan QRIS.
 - 💳 **DOKU Payment Gateway Support**: Dukungan penuh Virtual Account, QRIS Dinamis, E-Wallet, dan Gerai Retail dengan validasi tanda tangan (*digest signature*).
@@ -51,9 +64,10 @@
 │                                                                           │
 │  [1. Fast-Path Ingestion] ──► 200 OK (<50ms)                              │
 │  [2. Parser Engine]       ──► Regex Extraction (Amount, Sender, App)      │
-│  [3. Invoice Matcher]     ──► Match Total Amount (Base + Unique Code)     │
-│  [4. Status Mutation]     ──► UPDATE Invoice SET status = 'PAID'          │
-│  [5. HMAC Signer]         ──► Generate HMAC SHA-256 Outbound Signature    │
+│  [3. Turso LibSQL Cloud]  ──► Query & Atomic Update Mutations/Invoices    │
+│  [4. Invoice Matcher]     ──► Match Total Amount (Base + Unique Code)     │
+│  [5. Status Mutation]     ──► UPDATE Invoice SET status = 'PAID'          │
+│  [6. HMAC Signer]         ──► Generate HMAC SHA-256 Outbound Signature    │
 └─────────────────────────────────────┬─────────────────────────────────────┘
                                       │
                                       │ Outbound HTTP POST Webhook
@@ -70,7 +84,7 @@
 ## 🚀 Panduan Memulai Cepat (Local Development)
 
 ### Prasyarat
-- **Node.js**: versi `22.x` atau lebih tinggi
+- **Node.js**: versi `20.x` / `22.x` / `24.x`
 - **npm**: versi `10.x` atau lebih tinggi
 
 ### 1. Kloning Repositori
@@ -84,11 +98,13 @@ cd payment-bridge
 npm install
 ```
 
-### 3. Konfigurasi Lingkungan
-Buat file `.env` (atau gunakan `.env.example`):
+### 3. Konfigurasi Lingkungan (.env)
 ```env
 PORT=3001
 NODE_ENV=development
+TURSO_DATABASE_URL=libsql://payment-bridge-db-naufalirfan.aws-ap-northeast-1.turso.io
+TURSO_AUTH_TOKEN=your-turso-auth-token
+JWT_SECRET=your-secure-jwt-secret
 ```
 
 ### 4. Jalankan Server & Client Secara Bersamaan
@@ -100,23 +116,14 @@ npm run dev
 
 ---
 
-## ☁️ Deployment ke Vercel
-
-Aplikasi ini telah dikonfigurasi penuh untuk deploy ke Vercel sebagai Fullstack Monorepo Serverless.
-
-```bash
-# Login ke Vercel CLI
-vercel login
-
-# Deploy ke Production
-vercel deploy --prod --yes
-```
-
----
-
 ## 📚 API Reference
 
-### 1. Inbound Webhook: Payhooks Android
+### 1. Authentication
+* **Endpoint**: `POST /api/v1/auth/login`
+* **Payload**: `{ "username": "admin", "password": "yourpassword" }`
+* **Response**: `{ "success": true, "data": { "token": "...", "user": { ... } } }`
+
+### 2. Inbound Webhook: Payhooks Android
 * **Endpoint**: `POST /api/v1/callbacks/payhooks`
 * **Headers**: `X-Payhooks-Key: <DEVICE_SECRET_KEY>`
 * **Payload Contoh**:
@@ -130,11 +137,11 @@ vercel deploy --prod --yes
 }
 ```
 
-### 2. Inbound Webhook: DOKU Gateway
+### 3. Inbound Webhook: DOKU Gateway
 * **Endpoint**: `POST /api/v1/callbacks/doku`
 * **Headers**: `Client-Id`, `Request-Id`, `Request-Timestamp`, `Signature`
 
-### 3. Outbound Webhook ke Merchant
+### 4. Outbound Webhook ke Merchant
 * **Headers**:
   * `Content-Type: application/json`
   * `X-Bridge-Signature: <HMAC_SHA256_HEX_SIGNATURE>`
@@ -161,7 +168,7 @@ vercel deploy --prod --yes
 
 ---
 
-## 🔒 Verifikasi HMAC Signature di Backend Merchant (Contoh PHP & Node.js)
+## 🔒 Verifikasi HMAC Signature di Backend Merchant
 
 ### Contoh Node.js / Express:
 ```javascript

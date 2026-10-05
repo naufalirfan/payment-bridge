@@ -1,14 +1,18 @@
 import crypto from 'node:crypto';
 import { db } from './db.js';
 
-export function getWebhookConfig() {
-  const getSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
+export async function getWebhookConfig() {
+  const getVal = async (k, def = '') => {
+    const row = await db.get('SELECT value FROM settings WHERE key = ?', [k]);
+    return row ? row.value : def;
+  };
+
   return {
-    webhookUrl: getSetting.get('webhook_url')?.value || '',
-    webhookSecret: getSetting.get('webhook_secret')?.value || 'default_secret',
-    retryAttempts: parseInt(getSetting.get('retry_attempts')?.value || '3', 10),
-    retryDelaySeconds: parseInt(getSetting.get('retry_delay_seconds')?.value || '5', 10),
-    strictDeviceMode: getSetting.get('strict_device_mode')?.value === '1'
+    webhookUrl: await getVal('webhook_url', ''),
+    webhookSecret: await getVal('webhook_secret', 'default_secret'),
+    retryAttempts: parseInt(await getVal('retry_attempts', '3'), 10),
+    retryDelaySeconds: parseInt(await getVal('retry_delay_seconds', '5'), 10),
+    strictDeviceMode: (await getVal('strict_device_mode', '0')) === '1'
   };
 }
 
@@ -17,7 +21,7 @@ export function generateHmacSignature(payloadStr, secretKey) {
 }
 
 export async function dispatchWebhook(invoice, mutation, isManual = false) {
-  const config = getWebhookConfig();
+  const config = await getWebhookConfig();
   if (!config.webhookUrl) {
     console.warn('[Dispatcher] No merchant webhook URL configured.');
     return { success: false, reason: 'No webhook URL configured' };
@@ -90,19 +94,17 @@ export async function dispatchWebhook(invoice, mutation, isManual = false) {
   }
 
   // Insert log to database
-  const insertLog = db.prepare(`
+  await db.run(`
     INSERT INTO webhook_logs (id, invoice_id, status_code, response_body, attempts, payload, created_at)
     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-  `);
-
-  insertLog.run(
+  `, [
     logId,
     invoice.id,
     lastStatus,
     lastBody.slice(0, 2000),
     attempt,
     payloadString
-  );
+  ]);
 
   return {
     logId,
@@ -114,10 +116,10 @@ export async function dispatchWebhook(invoice, mutation, isManual = false) {
 }
 
 export async function retryWebhookLog(logId) {
-  const log = db.prepare('SELECT * FROM webhook_logs WHERE id = ?').get(logId);
+  const log = await db.get('SELECT * FROM webhook_logs WHERE id = ?', [logId]);
   if (!log) throw new Error('Webhook log not found');
 
-  const config = getWebhookConfig();
+  const config = await getWebhookConfig();
   if (!config.webhookUrl) {
     throw new Error('Merchant webhook URL is not configured');
   }
@@ -151,11 +153,11 @@ export async function retryWebhookLog(logId) {
   }
 
   // Update existing log with new attempt count and status
-  db.prepare(`
+  await db.run(`
     UPDATE webhook_logs 
     SET status_code = ?, response_body = ?, attempts = attempts + 1, created_at = datetime('now')
     WHERE id = ?
-  `).run(status, responseBody.slice(0, 2000), logId);
+  `, [status, responseBody.slice(0, 2000), logId]);
 
   return {
     id: logId,

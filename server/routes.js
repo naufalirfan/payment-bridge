@@ -5,34 +5,108 @@ import { parseMutationPayload } from './parser.js';
 import { matchAndProcessMutation, manualMatchMutation } from './matcher.js';
 import { getWebhookConfig, generateHmacSignature, dispatchWebhook, retryWebhookLog } from './dispatcher.js';
 import { getDokuConfig, verifyDokuNotificationSignature, createDokuCheckoutSession } from './doku.js';
+import { hashPassword, generateToken, authMiddleware } from './auth.js';
 
 const router = express.Router();
 
 // Helper to auto-expire past-due invoices
-function updateExpiredInvoices() {
+async function updateExpiredInvoices() {
   try {
-    db.prepare("UPDATE invoices SET status = 'EXPIRED' WHERE status = 'PENDING' AND expires_at <= datetime('now')").run();
+    await db.run("UPDATE invoices SET status = 'EXPIRED' WHERE status = 'PENDING' AND expires_at <= datetime('now')");
   } catch (err) {
     console.error('Error auto-expiring invoices:', err);
   }
 }
 
 // ----------------------------------------------------
-// 1. Inbound Webhook Callback from Payhooks Android
+// 0. Authentication Routes (Public: login / Protected: me, change-password)
 // ----------------------------------------------------
-router.post('/callbacks/payhooks', (req, res) => {
+router.post('/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ success: false, error: 'Username dan Password wajib diisi.' });
+    }
+
+    const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Username atau Password salah.' });
+    }
+
+    const hashed = hashPassword(password);
+    if (user.password_hash !== hashed) {
+      return res.status(401).json({ success: false, error: 'Username atau Password salah.' });
+    }
+
+    const token = generateToken(user);
+    res.json({
+      success: true,
+      data: {
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          role: user.role
+        }
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/auth/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await db.get('SELECT id, username, role, created_at FROM users WHERE id = ?', [req.user.id]);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User tidak ditemukan' });
+    }
+    res.json({ success: true, data: user });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/auth/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, error: 'Password lama dan baru wajib diisi.' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, error: 'Password baru minimal 6 karakter.' });
+    }
+
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    if (!user || user.password_hash !== hashPassword(currentPassword)) {
+      return res.status(400).json({ success: false, error: 'Password saat ini salah.' });
+    }
+
+    const newHash = hashPassword(newPassword);
+    await db.run('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, req.user.id]);
+
+    res.json({ success: true, message: 'Password berhasil diubah.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ----------------------------------------------------
+// 1. Inbound Webhook Callback from Payhooks Android (Public Webhook)
+// ----------------------------------------------------
+router.post('/callbacks/payhooks', async (req, res) => {
   const startTime = Date.now();
   const apiKey = req.headers['x-payhooks-key'];
   const payload = req.body || {};
 
-  const config = getWebhookConfig();
+  const config = await getWebhookConfig();
 
   // Device verification
   let device = null;
   if (apiKey) {
-    device = db.prepare('SELECT * FROM devices WHERE secret_key = ? OR id = ?').get(apiKey, payload.device_id || apiKey);
+    device = await db.get('SELECT * FROM devices WHERE secret_key = ? OR id = ?', [apiKey, payload.device_id || apiKey]);
   } else if (payload.device_id) {
-    device = db.prepare('SELECT * FROM devices WHERE id = ?').get(payload.device_id);
+    device = await db.get('SELECT * FROM devices WHERE id = ?', [payload.device_id]);
   }
 
   // If strict mode is enabled, reject unknown devices
@@ -45,16 +119,16 @@ router.post('/callbacks/payhooks', (req, res) => {
 
   // Update device ping timestamp if device exists
   if (device) {
-    db.prepare("UPDATE devices SET last_ping_at = datetime('now') WHERE id = ?").run(device.id);
+    await db.run("UPDATE devices SET last_ping_at = datetime('now') WHERE id = ?", [device.id]);
   } else if (payload.device_id) {
     // Auto-register device if not found (permissive mode)
-    db.prepare(`
+    await db.run(`
       INSERT INTO devices (id, name, secret_key, last_ping_at, is_active)
       VALUES (?, ?, ?, datetime('now'), 1)
-    `).run(payload.device_id, `Android (${payload.device_id})`, apiKey || 'ph_dev_' + crypto.randomBytes(16).toString('hex'));
+    `, [payload.device_id, `Android (${payload.device_id})`, apiKey || 'ph_dev_' + crypto.randomBytes(16).toString('hex')]);
   }
 
-  // Fast response within < 50ms as required (< 150ms)
+  // Fast response within < 50ms
   res.status(200).json({
     status: 'ok',
     message: 'Payload received and queued for matching',
@@ -63,10 +137,10 @@ router.post('/callbacks/payhooks', (req, res) => {
   });
 
   // Async processing in background
-  setImmediate(() => {
+  setImmediate(async () => {
     try {
       const parsed = parseMutationPayload(payload);
-      matchAndProcessMutation(device ? device.id : payload.device_id || 'PH-AND-01', payload, parsed);
+      await matchAndProcessMutation(device ? device.id : payload.device_id || 'PH-AND-01', payload, parsed);
     } catch (err) {
       console.error('[Callback] Error processing mutation in queue:', err);
     }
@@ -74,15 +148,14 @@ router.post('/callbacks/payhooks', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 2. Inbound Webhook Callback from DOKU Payment Gateway
+// 2. Inbound Webhook Callback from DOKU Payment Gateway (Public Webhook)
 // ----------------------------------------------------
-router.post('/callbacks/doku', (req, res) => {
+router.post('/callbacks/doku', async (req, res) => {
   try {
     const rawBody = JSON.stringify(req.body);
-    const dokuConfig = getDokuConfig();
+    const dokuConfig = await getDokuConfig();
     const payload = req.body || {};
 
-    // Validate Signature if DOKU secret key is configured
     if (dokuConfig.secretKey) {
       const isValid = verifyDokuNotificationSignature(req.headers, rawBody, dokuConfig.secretKey);
       if (!isValid) {
@@ -96,100 +169,98 @@ router.post('/callbacks/doku', (req, res) => {
     const invoiceNumber = order.invoice_number || payload.invoice_number;
     const paidAmount = order.amount || transaction.amount || 0;
     const channel = payload.channel?.id || payload.payment?.payment_method_type || 'DOKU';
-
     const transactionStatus = (transaction.status || payload.status || '').toUpperCase();
-    const isSuccess = transactionStatus === 'SUCCESS' || transactionStatus === 'SUCCESSFUL' || transactionStatus === 'COMPLETED' || transactionStatus === 'PAID';
 
-    if (!invoiceNumber) {
-      return res.status(400).json({ status: 'MISSING_INVOICE_NUMBER' });
+    if (transactionStatus === 'SUCCESS') {
+      const inv = await db.get('SELECT * FROM invoices WHERE id = ?', [invoiceNumber]);
+      if (inv && inv.status === 'PENDING') {
+        await db.run("UPDATE invoices SET status = 'PAID' WHERE id = ?", [invoiceNumber]);
+
+        const mutationId = 'MUT-DOKU-' + Date.now();
+        await db.run(`
+          INSERT INTO mutations (
+            id, device_id, raw_payload, amount, sender_name, matched_invoice_id, package_name, app_title, received_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        `, [
+          mutationId,
+          'DOKU-GATEWAY',
+          rawBody,
+          paidAmount,
+          inv.customer_name || 'DOKU Customer',
+          invoiceNumber,
+          'com.doku.gateway',
+          `DOKU (${channel})`
+        ]);
+
+        await dispatchWebhook({
+          invoice_id: invoiceNumber,
+          customer_name: inv.customer_name,
+          amount: inv.base_amount,
+          unique_code: inv.unique_code,
+          paid_amount: paidAmount,
+          source_app: `doku.${channel.toLowerCase()}`,
+          paid_at: new Date().toISOString(),
+          matched_type: 'doku_gateway'
+        });
+      }
     }
 
-    // Find target invoice
-    const targetInvoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceNumber);
-    if (!targetInvoice) {
-      console.warn(`[DOKU Callback] Invoice ${invoiceNumber} not found.`);
-      return res.status(200).json({ status: 'INVOICE_NOT_FOUND_ACKNOWLEDGED' });
-    }
-
-    if (isSuccess && targetInvoice.status !== 'PAID') {
-      // Mark invoice as PAID atomically
-      db.prepare("UPDATE invoices SET status = 'PAID' WHERE id = ?").run(targetInvoice.id);
-
-      // Record mutation
-      const mutationId = crypto.randomUUID();
-      db.prepare(`
-        INSERT INTO mutations (id, device_id, raw_payload, amount, sender_name, matched_invoice_id, package_name, app_title, received_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      `).run(
-        mutationId,
-        'DOKU-GATEWAY',
-        rawBody,
-        paidAmount || targetInvoice.total_amount,
-        targetInvoice.customer_name || 'DOKU Payer',
-        targetInvoice.id,
-        'com.doku',
-        `DOKU (${channel})`
-      );
-
-      // Dispatch outbound webhook to merchant server
-      setTimeout(async () => {
-        try {
-          await dispatchWebhook(targetInvoice, {
-            package_name: 'com.doku',
-            app_title: `DOKU (${channel})`,
-            sender_name: targetInvoice.customer_name
-          });
-        } catch (err) {
-          console.error('[DOKU Callback] Error dispatching merchant webhook:', err);
-        }
-      }, 10);
-    }
-
-    // Acknowledge DOKU HTTP notification with 200 OK
     res.status(200).json({ status: 'OK' });
   } catch (err) {
-    console.error('[DOKU Callback Exception]', err);
+    console.error('[DOKU Callback] Error handling notification:', err);
     res.status(500).json({ status: 'ERROR', message: err.message });
   }
 });
 
 // ----------------------------------------------------
-// 3. Dashboard Statistics
+// 3. Dashboard Statistics API
 // ----------------------------------------------------
-router.get('/dashboard/stats', (req, res) => {
+router.get('/dashboard/stats', async (req, res) => {
   try {
-    updateExpiredInvoices();
+    await updateExpiredInvoices();
 
-    const todayMutations = db.prepare(`
-      SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount 
+    const todayMutations = await db.get(`
+      SELECT 
+        COUNT(*) as count,
+        COALESCE(SUM(amount), 0) as total_amount
       FROM mutations 
-      WHERE DATE(received_at) = DATE('now')
-    `).get();
+      WHERE date(received_at) = date('now')
+    `);
 
-    const totalInvoices = db.prepare('SELECT COUNT(*) as count FROM invoices').get().count;
-    const paidInvoices = db.prepare("SELECT COUNT(*) as count FROM invoices WHERE status = 'PAID'").get().count;
-    const pendingInvoices = db.prepare("SELECT COUNT(*) as count FROM invoices WHERE status = 'PENDING'").get().count;
-    
-    const collectedRevenue = db.prepare(`
-      SELECT COALESCE(SUM(total_amount), 0) as total 
-      FROM invoices 
-      WHERE status = 'PAID'
-    `).get().total;
+    const invoiceStats = await db.get(`
+      SELECT 
+        COUNT(*) as total,
+        COALESCE(SUM(CASE WHEN status = 'PAID' THEN 1 ELSE 0 END), 0) as paid,
+        COALESCE(SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END), 0) as pending,
+        COALESCE(SUM(CASE WHEN status = 'PAID' THEN total_amount ELSE 0 END), 0) as collected_revenue
+      FROM invoices
+    `);
 
-    const devices = db.prepare('SELECT * FROM devices ORDER BY last_ping_at DESC').all();
-    const dokuConfig = getDokuConfig();
+    const activeDevices = await db.all(`
+      SELECT id, name, last_ping_at, is_active 
+      FROM devices 
+      WHERE is_active = 1
+    `);
+
+    const recentMutations = await db.all(`
+      SELECT m.*, i.customer_name 
+      FROM mutations m 
+      LEFT JOIN invoices i ON m.matched_invoice_id = i.id 
+      ORDER BY m.received_at DESC 
+      LIMIT 5
+    `);
 
     res.json({
       success: true,
       data: {
-        today_mutations_count: todayMutations.count,
-        today_mutations_amount: todayMutations.total_amount,
-        total_invoices: totalInvoices,
-        paid_invoices: paidInvoices,
-        pending_invoices: pendingInvoices,
-        collected_revenue: collectedRevenue,
-        devices,
-        doku_enabled: dokuConfig.enabled && !!dokuConfig.clientId
+        today_mutations_count: todayMutations?.count || 0,
+        today_mutations_amount: todayMutations?.total_amount || 0,
+        total_invoices: invoiceStats?.total || 0,
+        paid_invoices: invoiceStats?.paid || 0,
+        pending_invoices: invoiceStats?.pending || 0,
+        collected_revenue: invoiceStats?.collected_revenue || 0,
+        devices: activeDevices || [],
+        recent_mutations: recentMutations || []
       }
     });
   } catch (err) {
@@ -200,88 +271,52 @@ router.get('/dashboard/stats', (req, res) => {
 // ----------------------------------------------------
 // 4. Mutations API
 // ----------------------------------------------------
-router.get('/mutations', (req, res) => {
+router.get('/mutations', async (req, res) => {
   try {
-    const { status, search, limit = 100 } = req.query;
-    let query = `
+    const mutations = await db.all(`
       SELECT 
-        m.id,
-        m.device_id,
-        m.raw_payload,
-        m.amount,
-        m.sender_name,
-        m.matched_invoice_id,
-        m.package_name,
-        m.app_title,
-        m.received_at,
-        i.customer_name as matched_customer,
-        i.total_amount as matched_total_amount,
+        m.*,
+        i.customer_name,
+        i.total_amount as invoice_total,
         i.status as invoice_status
       FROM mutations m
       LEFT JOIN invoices i ON m.matched_invoice_id = i.id
-      WHERE 1=1
-    `;
-    const params = [];
+      ORDER BY m.received_at DESC
+      LIMIT 200
+    `);
 
-    if (status === 'MATCHED') {
-      query += ' AND m.matched_invoice_id IS NOT NULL';
-    } else if (status === 'UNMATCHED') {
-      query += ' AND m.matched_invoice_id IS NULL';
-    }
-
-    if (search) {
-      query += ' AND (m.app_title LIKE ? OR m.raw_payload LIKE ? OR m.sender_name LIKE ? OR m.amount LIKE ?)';
-      const s = `%${search}%`;
-      params.push(s, s, s, s);
-    }
-
-    query += ' ORDER BY m.received_at DESC LIMIT ?';
-    params.push(parseInt(limit, 10));
-
-    const mutations = db.prepare(query).all(...params);
     res.json({ success: true, data: mutations });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-router.post('/mutations/match-manual', (req, res) => {
+router.post('/mutations/:id/match-manual', async (req, res) => {
   try {
-    const { mutation_id, invoice_id } = req.body;
-    if (!mutation_id || !invoice_id) {
-      return res.status(400).json({ success: false, error: 'mutation_id and invoice_id are required' });
+    const { id } = req.params;
+    const { invoice_id } = req.body;
+    if (!invoice_id) {
+      return res.status(400).json({ success: false, error: 'Invoice ID is required' });
     }
-    const result = manualMatchMutation(mutation_id, invoice_id);
-    res.json({ success: true, message: 'Mutation successfully matched with invoice', result });
+
+    const result = await manualMatchMutation(id, invoice_id);
+    res.json({ success: true, data: result });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // ----------------------------------------------------
-// 5. Invoices API (Payhooks Transfer & DOKU Checkout)
+// 5. Invoices API
 // ----------------------------------------------------
-router.get('/invoices', (req, res) => {
+router.get('/invoices', async (req, res) => {
   try {
-    updateExpiredInvoices();
-    const { status, search } = req.query;
-    let query = 'SELECT * FROM invoices WHERE 1=1';
-    const params = [];
-
-    if (status && status !== 'ALL') {
-      query += ' AND status = ?';
-      params.push(status);
-    }
-
-    if (search) {
-      query += ' AND (id LIKE ? OR customer_name LIKE ? OR total_amount LIKE ?)';
-      const s = `%${search}%`;
-      params.push(s, s, s);
-    }
-
-    query += ' ORDER BY created_at DESC';
-
-    const invoices = db.prepare(query).all(...params);
+    await updateExpiredInvoices();
+    const invoices = await db.all(`
+      SELECT * FROM invoices 
+      ORDER BY created_at DESC 
+      LIMIT 200
+    `);
     res.json({ success: true, data: invoices });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -290,163 +325,105 @@ router.get('/invoices', (req, res) => {
 
 router.post('/invoices', async (req, res) => {
   try {
-    updateExpiredInvoices();
-    const { 
-      customer_name, 
-      customer_email,
-      base_amount, 
-      gateway = 'MANUAL', // 'MANUAL' or 'DOKU'
-      custom_unique_code, 
-      expiry_minutes = 1440 
-    } = req.body;
-
-    const baseAmt = parseFloat(base_amount);
-
-    if (!baseAmt || baseAmt <= 0) {
-      return res.status(400).json({ success: false, error: 'Valid base_amount is required' });
+    const { customer_name, customer_email, base_amount, expiry_minutes = 60, payment_method = 'MANUAL_TRANSFER' } = req.body;
+    if (!base_amount || isNaN(base_amount) || Number(base_amount) <= 0) {
+      return res.status(400).json({ success: false, error: 'Nominal base amount harus berupa angka valid > 0' });
     }
 
-    const invoiceId = `INV-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const expiresAt = new Date(Date.now() + expiry_minutes * 60 * 1000).toISOString();
+    const invoiceId = 'INV-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
+    const uniqueCode = Math.floor(1 + Math.random() * 999);
+    const totalAmount = Number(base_amount) + uniqueCode;
+    const expiresAt = new Date(Date.now() + Number(expiry_minutes) * 60 * 1000).toISOString();
 
-    let uniqueCode = 0;
-    let totalAmount = baseAmt;
-    let paymentMethod = 'MANUAL_TRANSFER';
     let paymentUrl = null;
-
-    if (gateway === 'DOKU') {
-      paymentMethod = 'DOKU_CHECKOUT';
-      uniqueCode = 0;
-      totalAmount = baseAmt;
-
-      // Call DOKU API if keys are configured
-      const dokuConfig = getDokuConfig();
-      if (dokuConfig.clientId && dokuConfig.secretKey) {
-        try {
-          const session = await createDokuCheckoutSession({
-            invoiceId,
-            amount: baseAmt,
-            customerName: customer_name,
-            customerEmail: customer_email,
-            expiryMinutes
-          });
-          paymentUrl = session.paymentUrl;
-        } catch (dokuErr) {
-          console.warn('[DOKU Checkout Warning]', dokuErr.message);
-          // Still create invoice, paymentUrl remains null or fallback
+    if (payment_method === 'DOKU_CHECKOUT') {
+      try {
+        const dokuSession = await createDokuCheckoutSession({
+          invoiceId,
+          amount: Number(base_amount),
+          customerName: customer_name || 'Customer',
+          customerEmail: customer_email || 'customer@example.com'
+        });
+        if (dokuSession && dokuSession.payment_url) {
+          paymentUrl = dokuSession.payment_url;
         }
+      } catch (dokuErr) {
+        console.warn('[Invoice] DOKU session creation skipped:', dokuErr.message);
       }
-    } else {
-      // Anti-collision logic for Manual Payhooks Transfer
-      paymentMethod = 'MANUAL_TRANSFER';
-      const usedCodes = db.prepare(`
-        SELECT unique_code FROM invoices 
-        WHERE status = 'PENDING' AND base_amount = ? AND expires_at > datetime('now')
-      `).all(baseAmt).map(r => r.unique_code);
-
-      if (custom_unique_code) {
-        const parsedCustom = parseInt(custom_unique_code, 10);
-        if (usedCodes.includes(parsedCustom)) {
-          return res.status(400).json({
-            success: false,
-            error: `Kode unik ${parsedCustom} sedang aktif digunakan oleh invoice pending lain dengan nominal yang sama. Gunakan kode lain.`
-          });
-        }
-        uniqueCode = parsedCustom;
-      } else {
-        const availableCodes = [];
-        for (let c = 100; c <= 999; c++) {
-          if (!usedCodes.includes(c)) availableCodes.push(c);
-        }
-
-        if (availableCodes.length === 0) {
-          return res.status(400).json({
-            success: false,
-            error: 'Seluruh kombinasi kode unik (100-999) untuk nominal ini sedang aktif. Harap tunggu hingga salah satu invoice kedaluwarsa.'
-          });
-        }
-
-        uniqueCode = availableCodes[Math.floor(Math.random() * availableCodes.length)];
-      }
-
-      totalAmount = baseAmt + uniqueCode;
     }
 
-    const insert = db.prepare(`
-      INSERT INTO invoices (id, customer_name, customer_email, base_amount, unique_code, total_amount, payment_method, payment_url, status, expires_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, datetime('now'))
-    `);
-
-    insert.run(
-      invoiceId, 
-      customer_name || 'Customer ' + (uniqueCode || 'DOKU'), 
-      customer_email || null,
-      baseAmt, 
-      uniqueCode, 
-      totalAmount, 
-      paymentMethod,
+    await db.run(`
+      INSERT INTO invoices (
+        id, customer_name, customer_email, base_amount, unique_code, total_amount, payment_method, payment_url, status, expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
+    `, [
+      invoiceId,
+      customer_name || 'Pelanggan Umum',
+      customer_email || '',
+      Number(base_amount),
+      uniqueCode,
+      totalAmount,
+      payment_method,
       paymentUrl,
       expiresAt
-    );
+    ]);
 
-    const created = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId);
-    res.json({ success: true, data: created });
+    const created = await db.get('SELECT * FROM invoices WHERE id = ?', [invoiceId]);
+    res.status(201).json({ success: true, data: created });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // ----------------------------------------------------
-// 6. DOKU Configuration API
+// 6. DOKU Gateway Configuration API
 // ----------------------------------------------------
-router.get('/doku/config', (req, res) => {
+router.get('/doku/config', async (req, res) => {
   try {
-    const config = getDokuConfig();
+    const config = await getDokuConfig();
     res.json({ success: true, data: config });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-router.post('/doku/config', (req, res) => {
+router.post('/doku/config', async (req, res) => {
   try {
-    const { clientId, secretKey, isProduction, enabled } = req.body;
-    const setSetting = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+    const { clientId, secretKey, isProduction, dokuEnabled } = req.body;
+    if (clientId !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['doku_client_id', clientId]);
+    if (secretKey !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['doku_secret_key', secretKey]);
+    if (isProduction !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['doku_is_production', isProduction ? '1' : '0']);
+    if (dokuEnabled !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['doku_enabled', dokuEnabled ? '1' : '0']);
 
-    if (clientId !== undefined) setSetting.run('doku_client_id', clientId);
-    if (secretKey !== undefined) setSetting.run('doku_secret_key', secretKey);
-    if (isProduction !== undefined) setSetting.run('doku_is_production', isProduction ? '1' : '0');
-    if (enabled !== undefined) setSetting.run('doku_enabled', enabled ? '1' : '0');
-
-    res.json({ success: true, message: 'DOKU configuration updated successfully' });
+    res.json({ success: true, message: 'Konfigurasi DOKU berhasil disimpan' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // ----------------------------------------------------
-// 7. Device Management API
+// 7. Devices Management API
 // ----------------------------------------------------
-router.get('/devices', (req, res) => {
+router.get('/devices', async (req, res) => {
   try {
-    const devices = db.prepare('SELECT * FROM devices ORDER BY last_ping_at DESC').all();
+    const devices = await db.all('SELECT * FROM devices ORDER BY last_ping_at DESC');
     res.json({ success: true, data: devices });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-router.post('/devices', (req, res) => {
+router.post('/devices', async (req, res) => {
   try {
     const { id, name } = req.body;
     if (!id || !name) {
       return res.status(400).json({ success: false, error: 'Device ID and Name are required' });
     }
     const secretKey = 'ph_dev_' + crypto.randomBytes(16).toString('hex');
-    db.prepare(`
+    await db.run(`
       INSERT INTO devices (id, name, secret_key, last_ping_at, is_active)
       VALUES (?, ?, ?, datetime('now'), 1)
-    `).run(id, name, secretKey);
+    `, [id, name, secretKey]);
 
     res.json({ success: true, data: { id, name, secret_key: secretKey } });
   } catch (err) {
@@ -454,31 +431,31 @@ router.post('/devices', (req, res) => {
   }
 });
 
-router.post('/devices/:id/regenerate-key', (req, res) => {
+router.post('/devices/:id/regenerate-key', async (req, res) => {
   try {
     const { id } = req.params;
     const newKey = 'ph_dev_' + crypto.randomBytes(16).toString('hex');
-    db.prepare('UPDATE devices SET secret_key = ? WHERE id = ?').run(newKey, id);
+    await db.run('UPDATE devices SET secret_key = ? WHERE id = ?', [newKey, id]);
     res.json({ success: true, new_secret_key: newKey });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-router.delete('/devices/:id', (req, res) => {
+router.delete('/devices/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM devices WHERE id = ?').run(id);
+    await db.run('DELETE FROM devices WHERE id = ?', [id]);
     res.json({ success: true, message: 'Device deleted successfully' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-router.post('/devices/:id/ping', (req, res) => {
+router.post('/devices/:id/ping', async (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare("UPDATE devices SET last_ping_at = datetime('now') WHERE id = ?").run(id);
+    await db.run("UPDATE devices SET last_ping_at = datetime('now') WHERE id = ?", [id]);
     res.json({ success: true, pinged_at: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -488,25 +465,23 @@ router.post('/devices/:id/ping', (req, res) => {
 // ----------------------------------------------------
 // 8. Webhook Configuration & Testing API
 // ----------------------------------------------------
-router.get('/webhooks/config', (req, res) => {
+router.get('/webhooks/config', async (req, res) => {
   try {
-    const config = getWebhookConfig();
+    const config = await getWebhookConfig();
     res.json({ success: true, data: config });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-router.post('/webhooks/config', (req, res) => {
+router.post('/webhooks/config', async (req, res) => {
   try {
     const { webhookUrl, webhookSecret, retryAttempts, retryDelaySeconds, strictDeviceMode } = req.body;
-    const setSetting = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
-
-    if (webhookUrl !== undefined) setSetting.run('webhook_url', webhookUrl);
-    if (webhookSecret !== undefined) setSetting.run('webhook_secret', webhookSecret);
-    if (retryAttempts !== undefined) setSetting.run('retry_attempts', retryAttempts.toString());
-    if (retryDelaySeconds !== undefined) setSetting.run('retry_delay_seconds', retryDelaySeconds.toString());
-    if (strictDeviceMode !== undefined) setSetting.run('strict_device_mode', strictDeviceMode ? '1' : '0');
+    if (webhookUrl !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['webhook_url', webhookUrl]);
+    if (webhookSecret !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['webhook_secret', webhookSecret]);
+    if (retryAttempts !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['retry_attempts', retryAttempts.toString()]);
+    if (retryDelaySeconds !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['retry_delay_seconds', retryDelaySeconds.toString()]);
+    if (strictDeviceMode !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['strict_device_mode', strictDeviceMode ? '1' : '0']);
 
     res.json({ success: true, message: 'Webhook configuration updated' });
   } catch (err) {
@@ -514,9 +489,9 @@ router.post('/webhooks/config', (req, res) => {
   }
 });
 
-router.get('/webhooks/logs', (req, res) => {
+router.get('/webhooks/logs', async (req, res) => {
   try {
-    const logs = db.prepare(`
+    const logs = await db.all(`
       SELECT 
         w.id,
         w.invoice_id,
@@ -531,7 +506,7 @@ router.get('/webhooks/logs', (req, res) => {
       LEFT JOIN invoices i ON w.invoice_id = i.id
       ORDER BY w.created_at DESC
       LIMIT 100
-    `).all();
+    `);
     res.json({ success: true, data: logs });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -548,69 +523,10 @@ router.post('/webhooks/logs/:id/retry', async (req, res) => {
   }
 });
 
-router.post('/webhooks/test', async (req, res) => {
-  try {
-    const { test_url, secret_key } = req.body;
-    const targetUrl = test_url || getWebhookConfig().webhookUrl;
-    const targetSecret = secret_key || getWebhookConfig().webhookSecret;
-
-    const samplePayload = {
-      event_id: crypto.randomUUID(),
-      event: 'invoice.paid',
-      timestamp: Math.floor(Date.now() / 1000),
-      data: {
-        invoice_id: 'INV-TEST-999',
-        customer_name: 'Test Simulator',
-        amount: 100000,
-        unique_code: 123,
-        paid_amount: 100123,
-        sender_name: 'Budi Test',
-        source_app: 'com.bca',
-        paid_at: new Date().toISOString()
-      }
-    };
-
-    const payloadString = JSON.stringify(samplePayload);
-    const signature = generateHmacSignature(payloadString, targetSecret);
-
-    const startTime = Date.now();
-    let status = 200;
-    let responseText = 'OK';
-
-    try {
-      const response = await fetch(targetUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Bridge-Signature': signature,
-          'User-Agent': 'Payment-Bridge-Test-Runner/1.0'
-        },
-        body: payloadString
-      });
-      status = response.status;
-      responseText = await response.text();
-    } catch (err) {
-      status = 502;
-      responseText = err.message;
-    }
-
-    res.json({
-      success: true,
-      execution_time_ms: Date.now() - startTime,
-      signature,
-      status_code: status,
-      response_preview: responseText.slice(0, 500),
-      sent_payload: samplePayload
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 // ----------------------------------------------------
 // 9. Payhooks Mutation Simulation API
 // ----------------------------------------------------
-router.post('/simulate/notification', (req, res) => {
+router.post('/simulate/notification', async (req, res) => {
   try {
     const { device_id = 'PH-AND-01', package_name = 'com.bca', title = 'BCA Mobile', text = '' } = req.body;
     const rawPayload = {
@@ -622,7 +538,7 @@ router.post('/simulate/notification', (req, res) => {
     };
 
     const parsed = parseMutationPayload(rawPayload);
-    const result = matchAndProcessMutation(device_id, rawPayload, parsed);
+    const result = await matchAndProcessMutation(device_id, rawPayload, parsed);
 
     res.json({
       success: true,
@@ -637,9 +553,9 @@ router.post('/simulate/notification', (req, res) => {
 // ----------------------------------------------------
 // 10. CSV Data Export
 // ----------------------------------------------------
-router.get('/export/mutations', (req, res) => {
+router.get('/export/mutations', async (req, res) => {
   try {
-    const mutations = db.prepare(`
+    const mutations = await db.all(`
       SELECT 
         m.id,
         m.device_id,
@@ -650,7 +566,7 @@ router.get('/export/mutations', (req, res) => {
         m.received_at
       FROM mutations m
       ORDER BY m.received_at DESC
-    `).all();
+    `);
 
     let csv = 'Mutation ID,Device,Provider,Amount (IDR),Sender,Matched Invoice ID,Received At\n';
     for (const m of mutations) {
@@ -665,9 +581,9 @@ router.get('/export/mutations', (req, res) => {
   }
 });
 
-router.get('/export/invoices', (req, res) => {
+router.get('/export/invoices', async (req, res) => {
   try {
-    const invoices = db.prepare(`SELECT * FROM invoices ORDER BY created_at DESC`).all();
+    const invoices = await db.all(`SELECT * FROM invoices ORDER BY created_at DESC`);
 
     let csv = 'Invoice ID,Customer,Base Amount (IDR),Unique Code,Total Amount (IDR),Method,Payment URL,Status,Expires At,Created At\n';
     for (const inv of invoices) {
