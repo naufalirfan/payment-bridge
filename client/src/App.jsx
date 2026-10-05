@@ -12,7 +12,8 @@ import {
   Dropdown,
   Avatar,
   message,
-  theme
+  theme,
+  Tag
 } from "antd";
 import { 
   DashboardOutlined, 
@@ -29,7 +30,9 @@ import {
   UserOutlined,
   LogoutOutlined,
   KeyOutlined,
-  CloudServerOutlined
+  CloudServerOutlined,
+  CrownOutlined,
+  CodeOutlined
 } from "@ant-design/icons";
 
 import DashboardTab from "./components/DashboardTab";
@@ -38,6 +41,8 @@ import InvoicesTab from "./components/InvoicesTab";
 import DevicesTab from "./components/DevicesTab";
 import DokuSettingsTab from "./components/DokuSettingsTab";
 import WebhookSettingsTab from "./components/WebhookSettingsTab";
+import ApiDocsTab from "./components/ApiDocsTab";
+import SubscriptionTab from "./components/SubscriptionTab";
 import SimulatorModal from "./components/SimulatorModal";
 import CreateInvoiceModal from "./components/CreateInvoiceModal";
 import RawPayloadDrawer from "./components/RawPayloadDrawer";
@@ -87,7 +92,7 @@ export default function App() {
     setToken(userToken);
     localStorage.setItem("pb_user", JSON.stringify(userData));
     localStorage.setItem("pb_token", userToken);
-    message.success(`Selamat datang kembali, ${userData.username}!`);
+    message.success(`Selamat datang, ${userData.name || userData.username}!`);
   };
 
   const handleLogout = () => {
@@ -99,11 +104,13 @@ export default function App() {
   };
 
   const fetchAllData = async () => {
+    if (!token) return;
     try {
+      const headers = { "Authorization": `Bearer ${token}` };
       const [statsRes, mutRes, invRes] = await Promise.all([
-        fetch("/api/v1/dashboard/stats").then(r => r.json()),
-        fetch("/api/v1/mutations").then(r => r.json()),
-        fetch("/api/v1/invoices").then(r => r.json())
+        fetch("/api/v1/dashboard/stats", { headers }).then(r => r.json()),
+        fetch("/api/v1/mutations", { headers }).then(r => r.json()),
+        fetch("/api/v1/invoices", { headers }).then(r => r.json())
       ]);
 
       if (statsRes.success) setStats(statsRes.data);
@@ -111,6 +118,22 @@ export default function App() {
       if (invRes.success) setInvoices(invRes.data);
     } catch (err) {
       console.error("Data fetch error:", err);
+    }
+  };
+
+  const refreshProfile = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch("/api/v1/auth/me", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUser(data.data);
+        localStorage.setItem("pb_user", JSON.stringify(data.data));
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -137,7 +160,7 @@ export default function App() {
       icon: <TransactionOutlined style={{ fontSize: 16 }} />,
       label: (
         <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span>Mutasi Masuk</span>
+          <span>Mutasi Real-time</span>
           {mutations.length > 0 && (
             <Badge 
               count={mutations.length} 
@@ -159,6 +182,16 @@ export default function App() {
       label: "Device Android"
     },
     {
+      key: "api-docs",
+      icon: <CodeOutlined style={{ fontSize: 16, color: "#10B981" }} />,
+      label: "API & Integrasi Toko"
+    },
+    {
+      key: "subscription",
+      icon: <CrownOutlined style={{ fontSize: 16, color: "#F59E0B" }} />,
+      label: "Paket Langganan"
+    },
+    {
       key: "doku",
       icon: <CreditCardOutlined style={{ fontSize: 16, color: "#E11D48" }} />,
       label: "DOKU Gateway"
@@ -166,7 +199,7 @@ export default function App() {
     {
       key: "webhooks",
       icon: <ApiOutlined style={{ fontSize: 16 }} />,
-      label: "Webhook Settings"
+      label: "Webhook Logs"
     }
   ];
 
@@ -175,13 +208,24 @@ export default function App() {
       key: "user-info",
       label: (
         <div style={{ padding: "4px 0" }}>
-          <div style={{ fontWeight: 700, fontSize: 13.5 }}>{user?.username || "Admin"}</div>
-          <div style={{ fontSize: 11, color: "#64748B" }}>Fintech Administrator</div>
+          <div style={{ fontWeight: 700, fontSize: 13.5 }}>{user?.name || user?.username || "Merchant"}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>
+            {user?.email || "merchant@paymentbridge.id"}
+          </div>
+          <Tag color="blue" style={{ marginTop: 4, fontSize: 10.5 }}>
+            {user?.plan || "PRO TRIAL"}
+          </Tag>
         </div>
       ),
       disabled: true
     },
     { type: "divider" },
+    {
+      key: "menu-subscription",
+      icon: <CrownOutlined style={{ color: "#F59E0B" }} />,
+      label: "Upgrade Paket",
+      onClick: () => setSelectedKey("subscription")
+    },
     {
       key: "change-password",
       icon: <KeyOutlined />,
@@ -235,6 +279,22 @@ export default function App() {
             onRefresh={fetchAllData}
           />
         );
+      case "api-docs":
+        return (
+          <ApiDocsTab 
+            token={token} 
+            user={user} 
+            onRefreshProfile={refreshProfile} 
+          />
+        );
+      case "subscription":
+        return (
+          <SubscriptionTab 
+            user={user} 
+            token={token} 
+            onRefreshProfile={refreshProfile} 
+          />
+        );
       case "doku":
         return <DokuSettingsTab />;
       case "webhooks":
@@ -284,7 +344,6 @@ export default function App() {
     }
   };
 
-  // If not authenticated, display Login Portal
   if (!user || !token) {
     return (
       <ConfigProvider theme={customTheme}>
@@ -304,7 +363,7 @@ export default function App() {
         <Sider
           breakpoint="lg"
           collapsedWidth="0"
-          width={248}
+          width={256}
           className="app-sider"
           style={{
             position: "fixed",
@@ -320,7 +379,7 @@ export default function App() {
               <div className="app-logo-badge">PB</div>
               <div>
                 <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>Payment Bridge</span>
-                <div style={{ fontSize: 11, color: "var(--color-text-muted)", fontWeight: 500, marginTop: -2 }}>Fintech Gateway Core</div>
+                <div style={{ fontSize: 11, color: "var(--color-text-muted)", fontWeight: 500, marginTop: -2 }}>SaaS Gateway Core</div>
               </div>
             </div>
           </div>
@@ -333,14 +392,16 @@ export default function App() {
             style={{ borderRight: 0, padding: "14px 4px", background: "transparent" }}
           />
 
-          {/* Sider Footer: Turso Cloud Status */}
-          <div style={{ position: "absolute", bottom: 16, left: 16, right: 16, padding: "10px 12px", background: isDarkMode ? "#1F2937" : "#F8FAFC", borderRadius: 8, border: `1px solid ${isDarkMode ? '#374151' : '#E2E8F0'}`, fontSize: 11.5 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: "#2563EB" }}>
-              <CloudServerOutlined />
-              <span>Turso LibSQL Cloud</span>
+          {/* Sider Footer: Merchant Plan & Turso Status */}
+          <div style={{ position: "absolute", bottom: 16, left: 16, right: 16, padding: "12px", background: isDarkMode ? "#1F2937" : "#F8FAFC", borderRadius: 8, border: `1px solid ${isDarkMode ? '#374151' : '#E2E8F0'}`, fontSize: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontWeight: 600 }}>Paket:</span>
+              <Tag color={user?.plan === "ENTERPRISE" ? "purple" : "blue"} style={{ margin: 0 }}>
+                {user?.plan || "STARTER"}
+              </Tag>
             </div>
-            <div style={{ color: "var(--color-text-muted)", marginTop: 2, fontSize: 10.5 }}>
-              Distributed Edge Replica (sin/tokyo)
+            <div style={{ color: "var(--color-text-muted)", marginTop: 6, fontSize: 11 }}>
+              Turso Cloud LibSQL (Tokyo Edge)
             </div>
           </div>
         </Sider>
@@ -367,7 +428,7 @@ export default function App() {
         </Drawer>
 
         {/* Main Content Layout */}
-        <Layout className="site-layout" style={{ marginLeft: 248, transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)", background: "var(--color-bg)" }}>
+        <Layout className="site-layout" style={{ marginLeft: 256, transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)", background: "var(--color-bg)" }}>
           <Header className="app-header">
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <Button
@@ -382,7 +443,9 @@ export default function App() {
                  selectedKey === "mutations" ? "Mutasi Real-time" :
                  selectedKey === "invoices" ? "Invoices" :
                  selectedKey === "devices" ? "Device Android" :
-                 selectedKey === "doku" ? "DOKU Gateway" : "Webhook Settings"}
+                 selectedKey === "api-docs" ? "API & Integrasi Toko" :
+                 selectedKey === "subscription" ? "Paket Langganan" :
+                 selectedKey === "doku" ? "DOKU Gateway" : "Webhook Logs"}
               </Text>
             </div>
 
@@ -450,10 +513,10 @@ export default function App() {
               <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" arrow>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 8px", borderRadius: 8, border: `1px solid ${isDarkMode ? '#374151' : '#E2E8F0'}` }}>
                   <Avatar size={28} style={{ backgroundColor: "#2563EB", fontWeight: 700 }}>
-                    {user?.username ? user.username[0].toUpperCase() : "A"}
+                    {user?.username ? user.username[0].toUpperCase() : "M"}
                   </Avatar>
                   <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                    {user?.username || "Admin"}
+                    {user?.name || user?.username || "Merchant"}
                   </span>
                 </div>
               </Dropdown>
