@@ -174,7 +174,7 @@ router.post('/merchant/subscribe', authMiddleware, async (req, res) => {
       INSERT INTO invoices (
         id, merchant_id, customer_name, customer_email, base_amount, unique_code, total_amount, payment_method, payment_url, status, expires_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [invoiceId, req.user.id, `Langganan ${targetPlan.name} (${req.user.username})`, req.user.email || 'billing@merchant.com', targetPlan.price, uniqueCode, totalAmount, expiresAt]);
+    `, [invoiceId, req.user.id, `Langganan ${targetPlan.name} (${req.user.username})`, req.user.email || 'billing@merchant.com', targetPlan.price, uniqueCode, totalAmount, 'MANUAL_TRANSFER', null, 'PENDING', expiresAt]);
 
     const created = await db.get('SELECT * FROM invoices WHERE id = ?', [invoiceId]);
     res.json({ success: true, data: { orderId, invoice: created, plan: targetPlan } });
