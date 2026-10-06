@@ -241,7 +241,7 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
                 <Tag color="blue">Best Value</Tag>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <span style={{ fontSize: 28, fontWeight: 800, color: "#2563EB" }}>Rp 20.000</span>
+                <span style={{ fontSize: 28, fontWeight: 800, color: "#2563EB" }}>Rp 35.000</span>
                 <Text type="secondary" style={{ fontSize: 12 }}> / bulan</Text>
                 <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
                   Volume transaksi tinggi & stabil
@@ -260,7 +260,7 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
               </div>
             </div>
             <Button type="primary" block size="large" onClick={() => handleSubscribe("PRO")} loading={loadingPlan === "PRO"}>
-              Upgrade Pro Rp 20rb
+              Upgrade Pro Rp 35rb
             </Button>
           </Card>
         </Col>

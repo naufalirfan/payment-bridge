@@ -159,7 +159,7 @@ router.post('/merchant/subscribe', authMiddleware, async (req, res) => {
     const plans = {
       PAYG: { name: 'Pay As You Go (Deposit 1000 Trx)', price: 20000, quota: 1000 },
       STARTER: { name: 'Starter Plan', price: 20000, quota: 500 },
-      PRO: { name: 'Pro Plan', price: 20000, quota: 5000 },
+      PRO: { name: 'Pro Plan', price: 35000, quota: 5000 },
       ENTERPRISE: { name: 'Enterprise Plan', price: 50000, quota: 999999 }
     };
     const targetPlan = plans[plan] || plans.PRO;
