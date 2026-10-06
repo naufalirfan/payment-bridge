@@ -22,9 +22,7 @@ import {
   CopyOutlined,
   QrcodeOutlined,
   ArrowRightOutlined,
-  DollarCircleOutlined,
-  RocketOutlined,
-  SafetyCertificateOutlined
+  GiftOutlined
 } from "@ant-design/icons";
 
 const { Title, Text, Paragraph } = Typography;
@@ -33,6 +31,8 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
   const [loadingPlan, setLoadingPlan] = useState(null);
   const [checkoutInvoice, setCheckoutInvoice] = useState(null);
   const [simulating, setSimulating] = useState(false);
+
+  const currentPlan = (user?.plan || "FREE").toUpperCase();
 
   const handleSubscribe = async (planKey) => {
     setLoadingPlan(planKey);
@@ -49,7 +49,13 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Gagal membuat tagihan langganan");
+        throw new Error(data.error || "Gagal memproses paket");
+      }
+
+      if (planKey === "FREE") {
+        message.success("✅ Paket Free berhasil diaktifkan!");
+        if (onRefreshProfile) onRefreshProfile();
+        return;
       }
 
       setCheckoutInvoice({
@@ -59,7 +65,6 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
       });
       message.success("Tagihan untuk " + (data.data.plan?.name || planKey) + " berhasil dibuat!");
 
-      // If DOKU paymentUrl exists, open immediately
       if (data.data.paymentUrl) {
         window.open(data.data.paymentUrl, '_blank');
       }
@@ -116,7 +121,7 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <CrownFilled style={{ color: "#F59E0B", fontSize: 20 }} />
                 <Title level={4} style={{ margin: 0, fontWeight: 700 }}>
-                  Paket Aktif: <span style={{ color: "#2563EB" }}>{user?.plan || "FREE"}</span>
+                  Paket Aktif: <span style={{ color: "#2563EB" }}>{currentPlan}</span>
                 </Title>
               </div>
               <Text type="secondary">
@@ -125,17 +130,56 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
             </Space>
           </Col>
           <Col xs={24} sm={8} style={{ textAlign: "right" }}>
-            <Tag color={user?.plan === "ENTERPRISE" ? "purple" : user?.plan === "PRO" ? "blue" : user?.plan === "PAYG" ? "green" : "default"} style={{ fontSize: 13, padding: "4px 12px", borderRadius: 20 }}>
+            <Tag color={currentPlan === "ENTERPRISE" ? "purple" : currentPlan === "PRO" ? "blue" : currentPlan === "PAYG" ? "green" : currentPlan === "STARTER" ? "cyan" : "default"} style={{ fontSize: 13, padding: "4px 12px", borderRadius: 20 }}>
               Status: ACTIVE
             </Tag>
           </Col>
         </Row>
       </Card>
 
-      {/* Pricing Cards (PAYG, Starter, Pro, Enterprise) */}
+      {/* Pricing Cards (Free, PAYG, Starter, Pro, Enterprise) */}
       <Row gutter={[16, 16]} align="stretch">
-        {/* 1. PAYG Plan */}
-        <Col xs={24} sm={12} lg={6}>
+        {/* 1. Free Plan */}
+        <Col xs={24} sm={12} lg={4} xl={4} style={{ flex: "1 1 200px" }}>
+          <Card className="card-elevated" style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <Title level={4} style={{ margin: 0, fontWeight: 700 }}>Free</Title>
+                <Tag color="default">Gratis</Tag>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <span style={{ fontSize: 26, fontWeight: 800 }}>Rp 0</span>
+                <Text type="secondary" style={{ fontSize: 12 }}> / gratis</Text>
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                  Uji coba & testing sistem
+                </div>
+              </div>
+              <Paragraph type="secondary" style={{ fontSize: 12 }}>
+                Bebas coba integrasi payment bridge tanpa biaya langganan.
+              </Paragraph>
+              <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 14, marginBottom: 20 }}>
+                <Space direction="vertical" size={8} style={{ width: "100%", fontSize: 12 }}>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>100 Invoice</strong> / bln</div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>1 Device Android</strong></div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> Notifikasi Mutasi Real-time</div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> Webhook Standar</div>
+                </Space>
+              </div>
+            </div>
+            <Button 
+              block 
+              size="large" 
+              disabled={currentPlan === "FREE"} 
+              onClick={() => handleSubscribe("FREE")} 
+              loading={loadingPlan === "FREE"}
+            >
+              {currentPlan === "FREE" ? "Paket Saat Ini" : "Pilih Free"}
+            </Button>
+          </Card>
+        </Col>
+
+        {/* 2. PAYG Plan */}
+        <Col xs={24} sm={12} lg={5} xl={5} style={{ flex: "1 1 220px" }}>
           <Card 
             className="card-elevated" 
             style={{ 
@@ -149,24 +193,24 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <Title level={4} style={{ margin: 0, fontWeight: 700, color: "#10B981" }}>PAYG</Title>
-                <Tag color="green">Pay As You Go</Tag>
+                <Tag color="green">Fleksibel</Tag>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <span style={{ fontSize: 28, fontWeight: 800, color: "#10B981" }}>Rp 20</span>
-                <Text type="secondary" style={{ fontSize: 12 }}> / transaksi</Text>
+                <span style={{ fontSize: 26, fontWeight: 800, color: "#10B981" }}>Rp 20</span>
+                <Text type="secondary" style={{ fontSize: 12 }}> / trx</Text>
                 <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-                  Deposit Saldo <strong>Rp 20.000</strong> (1.000 Trx)
+                  Deposit Saldo <strong>Rp 20.000</strong>
                 </div>
               </div>
               <Paragraph type="secondary" style={{ fontSize: 12 }}>
-                Tanpa biaya langganan bulanan. Saldo transaksi tidak pernah kedaluwarsa.
+                Tanpa bulanan. Saldo transaksi tidak pernah kedaluwarsa.
               </Paragraph>
               <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 14, marginBottom: 20 }}>
                 <Space direction="vertical" size={8} style={{ width: "100%", fontSize: 12 }}>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>1.000 Kuota Trx</strong> Saldo</div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>1.000 Trx</strong> Saldo</div>
                   <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> Masa Aktif <strong>Selamanya</strong></div>
                   <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>2 Device Android</strong></div>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> DOKU Gateway & Webhook</div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> DOKU Gateway Live</div>
                 </Space>
               </div>
             </div>
@@ -183,23 +227,23 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
           </Card>
         </Col>
 
-        {/* 2. Starter Plan */}
-        <Col xs={24} sm={12} lg={6}>
+        {/* 3. Starter Plan */}
+        <Col xs={24} sm={12} lg={5} xl={5} style={{ flex: "1 1 220px" }}>
           <Card className="card-elevated" style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <Title level={4} style={{ margin: 0, fontWeight: 700 }}>Starter</Title>
-                <Tag color="default">Hemat</Tag>
+                <Tag color="cyan">Hemat</Tag>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <span style={{ fontSize: 28, fontWeight: 800 }}>Rp 20.000</span>
+                <span style={{ fontSize: 26, fontWeight: 800 }}>Rp 20.000</span>
                 <Text type="secondary" style={{ fontSize: 12 }}> / bulan</Text>
                 <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-                  Cocok untuk online shop pemula
+                  Cocok toko online personal
                 </div>
               </div>
               <Paragraph type="secondary" style={{ fontSize: 12 }}>
-                Paket bulanan ekonomis untuk bisnis personal & toko online pemula.
+                Paket bulanan ekonomis untuk bisnis & toko online pemula.
               </Paragraph>
               <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 14, marginBottom: 20 }}>
                 <Space direction="vertical" size={8} style={{ width: "100%", fontSize: 12 }}>
@@ -216,8 +260,8 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
           </Card>
         </Col>
 
-        {/* 3. Pro Plan (Featured) */}
-        <Col xs={24} sm={12} lg={6}>
+        {/* 4. Pro Plan (Featured) */}
+        <Col xs={24} sm={12} lg={5} xl={5} style={{ flex: "1 1 230px" }}>
           <Card 
             className="card-elevated" 
             style={{ 
@@ -241,14 +285,14 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
                 <Tag color="blue">Best Value</Tag>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <span style={{ fontSize: 28, fontWeight: 800, color: "#2563EB" }}>Rp 35.000</span>
+                <span style={{ fontSize: 26, fontWeight: 800, color: "#2563EB" }}>Rp 35.000</span>
                 <Text type="secondary" style={{ fontSize: 12 }}> / bulan</Text>
                 <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
                   Volume transaksi tinggi & stabil
                 </div>
               </div>
               <Paragraph type="secondary" style={{ fontSize: 12 }}>
-                Pilihan utama toko online & platform SaaS dengan traffic harian stabil.
+                Pilihan utama toko online & platform SaaS harian stabil.
               </Paragraph>
               <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 14, marginBottom: 20 }}>
                 <Space direction="vertical" size={8} style={{ width: "100%", fontSize: 12 }}>
@@ -265,8 +309,8 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
           </Card>
         </Col>
 
-        {/* 4. Enterprise Plan */}
-        <Col xs={24} sm={12} lg={6}>
+        {/* 5. Enterprise Plan */}
+        <Col xs={24} sm={12} lg={5} xl={5} style={{ flex: "1 1 230px" }}>
           <Card 
             className="card-elevated" 
             style={{ 
@@ -283,20 +327,20 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
                 <Tag color="purple">Unlimited</Tag>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <span style={{ fontSize: 28, fontWeight: 800, color: "#9333EA" }}>Rp 50.000</span>
+                <span style={{ fontSize: 26, fontWeight: 800, color: "#9333EA" }}>Rp 50.000</span>
                 <Text type="secondary" style={{ fontSize: 12 }}> / bulan</Text>
                 <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-                  Skala besar & volume tanpa batas
+                  Volume tanpa batas & dedicated SLA
                 </div>
               </div>
               <Paragraph type="secondary" style={{ fontSize: 12 }}>
-                Untuk perusahaan atau agensi dengan transaksi tanpa batas & dedicated SLA.
+                Untuk perusahaan dengan volume transaksi skala besar & SLA khusus.
               </Paragraph>
               <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 14, marginBottom: 20 }}>
                 <Space direction="vertical" size={8} style={{ width: "100%", fontSize: 12 }}>
                   <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>Unlimited Android Device</strong></div>
                   <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>Unlimited Invoices</strong></div>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> High Availability Edge Routing</div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> High Availability Edge</div>
                   <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> Dedicated SLA & Bantuan</div>
                 </Space>
               </div>

@@ -157,12 +157,17 @@ router.post('/merchant/subscribe', authMiddleware, async (req, res) => {
   try {
     const { plan } = req.body;
     const plans = {
+      FREE: { name: 'Free Plan', price: 0, quota: 100 },
       PAYG: { name: 'Pay As You Go (Deposit 1000 Trx)', price: 20000, quota: 1000 },
       STARTER: { name: 'Starter Plan', price: 20000, quota: 500 },
       PRO: { name: 'Pro Plan', price: 35000, quota: 5000 },
       ENTERPRISE: { name: 'Enterprise Plan', price: 50000, quota: 999999 }
     };
     const targetPlan = plans[plan] || plans.PRO;
+    if (plan === 'FREE') {
+      await db.run('UPDATE users SET plan = ?, quota = ? WHERE id = ?', ['FREE', 100, req.user.id]);
+      return res.json({ success: true, message: 'Paket Free berhasil diaktifkan', data: { plan: targetPlan } });
+    }
     const invoiceId = 'INV-SUB-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
     const uniqueCode = Math.floor(1 + Math.random() * 999);
     const totalAmount = targetPlan.price + uniqueCode;
