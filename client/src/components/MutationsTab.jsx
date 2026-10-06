@@ -65,7 +65,7 @@ export default function MutationsTab({
       title: "Waktu Masuk",
       dataIndex: "received_at",
       key: "received_at",
-      width: 170,
+      width: 160,
       render: (val) => (
         <span className="mono-code" style={{ color: "#475569", fontSize: 12 }}>
           {new Date(val).toLocaleString("id-ID")}
@@ -76,7 +76,7 @@ export default function MutationsTab({
       title: "Bank / E-Wallet",
       dataIndex: "app_title",
       key: "app_title",
-      width: 160,
+      width: 150,
       render: (title, record) => {
         const badge = getBankBadge(title, record.package_name);
         return (
@@ -105,6 +105,7 @@ export default function MutationsTab({
       title: "Pengirim & Raw Notifikasi",
       dataIndex: "raw_payload",
       key: "raw_payload",
+      width: 240,
       render: (payloadStr, record) => {
         let text = payloadStr;
         try {
@@ -114,13 +115,13 @@ export default function MutationsTab({
           text = payloadStr;
         }
         return (
-          <Space direction="vertical" size={2} style={{ maxWidth: 360 }}>
+          <Space direction="vertical" size={2} style={{ maxWidth: 280 }}>
             {record.sender_name && (
               <Tag icon={<UserOutlined />} color="purple" style={{ margin: 0, fontSize: 11 }}>
                 {record.sender_name}
               </Tag>
             )}
-            <Text ellipsis={{ tooltip: text }} style={{ fontSize: 12.5, color: "#334155" }}>
+            <Text ellipsis={{ tooltip: text }} style={{ fontSize: 12, color: "#334155" }}>
               {text}
             </Text>
           </Space>
@@ -131,10 +132,10 @@ export default function MutationsTab({
       title: "Nominal Mutasi",
       dataIndex: "amount",
       key: "amount",
-      width: 160,
+      width: 150,
       align: "right",
       render: (val) => (
-        <span className="amount-credit" style={{ fontSize: 14 }}>
+        <span className="amount-credit" style={{ fontSize: 13.5 }}>
           + Rp {Number(val).toLocaleString("id-ID")}
         </span>
       )
@@ -143,7 +144,7 @@ export default function MutationsTab({
       title: "Status Match",
       dataIndex: "matched_invoice_id",
       key: "matched_invoice_id",
-      width: 170,
+      width: 150,
       render: (invoiceId) => {
         if (invoiceId) {
           return (
@@ -163,7 +164,7 @@ export default function MutationsTab({
     {
       title: "Aksi",
       key: "action",
-      width: 160,
+      width: 140,
       render: (_, record) => (
         <Space size={6}>
           <Tooltip title="Lihat Raw JSON Payload">
@@ -194,14 +195,14 @@ export default function MutationsTab({
 
   return (
     <Card className="card-elevated">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 14 }}>
-        <Space wrap size={10}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, width: "100%", maxWidth: 740 }}>
           <Input 
             prefix={<SearchOutlined style={{ color: "#94A3B8" }} />} 
             placeholder="Cari mutasi, pengirim, nominal..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 260 }}
+            style={{ flex: 1, minWidth: 160 }}
             allowClear
           />
           <Segmented
@@ -217,12 +218,12 @@ export default function MutationsTab({
             Refresh
           </Button>
           <Button icon={<DownloadOutlined />} onClick={handleExportCSV}>
-            Export CSV
+            CSV
           </Button>
-        </Space>
+        </div>
 
         <Button type="primary" ghost icon={<ThunderboltOutlined />} onClick={onOpenSimulator}>
-          Simulasikan Mutasi Masuk
+          Simulasikan Mutasi
         </Button>
       </div>
 
@@ -231,7 +232,8 @@ export default function MutationsTab({
         columns={columns}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10, showSizeChanger: true }}
+        scroll={{ x: 800 }}
+        pagination={{ pageSize: 10, showSizeChanger: true, responsive: true }}
         locale={{
           emptyText: (
             <Empty 
@@ -248,4 +250,3 @@ export default function MutationsTab({
     </Card>
   );
 }
-

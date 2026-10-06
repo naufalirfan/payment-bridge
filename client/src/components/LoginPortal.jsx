@@ -1,31 +1,26 @@
 import React, { useState } from "react";
-import { Card, Form, Input, Button, Typography, Alert, Space, Tooltip, Tabs, message } from "antd";
+import { Card, Form, Input, Button, Tabs, Typography, message, Tag, Space } from "antd";
 import { 
   UserOutlined, 
   LockOutlined, 
-  MailOutlined,
-  ShopOutlined,
-  SafetyCertificateOutlined, 
-  ThunderboltOutlined, 
-  SunOutlined, 
-  MoonOutlined,
+  MailOutlined, 
+  ShopOutlined, 
+  RocketOutlined,
+  SafetyCertificateOutlined,
   CloudServerOutlined,
-  KeyOutlined,
-  RocketOutlined
+  KeyOutlined
 } from "@ant-design/icons";
 
 const { Title, Text, Paragraph } = Typography;
 
-export default function LoginPortal({ onLoginSuccess, isDarkMode, onToggleTheme }) {
+export default function LoginPortal({ onLoginSuccess, isDarkMode }) {
   const [activeTab, setActiveTab] = useState("login");
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
   const [loginForm] = Form.useForm();
   const [registerForm] = Form.useForm();
 
   const handleLogin = async (values) => {
     setLoading(true);
-    setErrorMsg("");
     try {
       const res = await fetch("/api/v1/auth/login", {
         method: "POST",
@@ -33,13 +28,13 @@ export default function LoginPortal({ onLoginSuccess, isDarkMode, onToggleTheme 
         body: JSON.stringify(values)
       });
       const data = await res.json();
-      if (data.success && data.data?.token) {
+      if (data.success) {
         onLoginSuccess(data.data.user, data.data.token);
       } else {
-        setErrorMsg(data.error || "Gagal masuk. Periksa username dan password Anda.");
+        message.error(data.error || "Gagal masuk. Periksa username dan password.");
       }
     } catch (err) {
-      setErrorMsg("Koneksi ke server gagal: " + err.message);
+      message.error("Koneksi gagal: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -47,7 +42,6 @@ export default function LoginPortal({ onLoginSuccess, isDarkMode, onToggleTheme 
 
   const handleRegister = async (values) => {
     setLoading(true);
-    setErrorMsg("");
     try {
       const res = await fetch("/api/v1/auth/register", {
         method: "POST",
@@ -55,135 +49,80 @@ export default function LoginPortal({ onLoginSuccess, isDarkMode, onToggleTheme 
         body: JSON.stringify(values)
       });
       const data = await res.json();
-      if (data.success && data.data?.token) {
-        message.success("Pendaftaran berhasil! Akun Pro Trial 14 Hari Anda telah aktif.");
+      if (data.success) {
         onLoginSuccess(data.data.user, data.data.token);
       } else {
-        setErrorMsg(data.error || "Pendaftaran gagal. Silakan coba lagi.");
+        message.error(data.error || "Gagal mendaftar. Username atau email mungkin sudah digunakan.");
       }
     } catch (err) {
-      setErrorMsg("Koneksi gagal: " + err.message);
+      message.error("Koneksi gagal: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFillDemo = () => {
-    loginForm.setFieldsValue({
-      username: "admin",
-      password: "admin123"
-    });
-  };
-
   return (
-    <div 
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 24,
-        background: isDarkMode 
-          ? "radial-gradient(ellipse at top, #1E293B 0%, #0B0F19 100%)" 
-          : "radial-gradient(ellipse at top, #EFF6FF 0%, #F8FAFC 100%)",
-        position: "relative",
-        overflow: "hidden"
-      }}
-    >
-      {/* Theme Toggle Top Right */}
-      <div style={{ position: "absolute", top: 24, right: 24 }}>
-        <Tooltip title={isDarkMode ? "Ganti ke Mode Terang" : "Ganti ke Mode Malam"}>
-          <Button 
-            shape="circle"
-            size="large"
-            icon={isDarkMode ? <SunOutlined style={{ color: "#FBBF24" }} /> : <MoonOutlined style={{ color: "#475569" }} />}
-            onClick={onToggleTheme}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderColor: isDarkMode ? "#374151" : "#CBD5E1",
-              background: isDarkMode ? "#1F2937" : "#FFFFFF",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.08)"
-            }}
-          />
-        </Tooltip>
-      </div>
-
-      <div style={{ width: "100%", maxWidth: 460 }}>
+    <div style={{
+      minHeight: "100vh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: isDarkMode ? "#0B0F19" : "linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%)",
+      padding: "20px 12px"
+    }}>
+      <div style={{ width: "100%", maxWidth: 440 }}>
         {/* Brand Header */}
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div 
-            style={{ 
-              display: "inline-flex", 
-              alignItems: "center", 
-              justifyContent: "center", 
-              width: 54, 
-              height: 54, 
-              borderRadius: 14, 
-              background: "linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)", 
-              color: "#FFFFFF",
-              fontSize: 22,
-              fontWeight: 800,
-              boxShadow: "0 4px 20px rgba(37, 99, 235, 0.35)",
-              marginBottom: 14
-            }}
-          >
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{
+            width: 48,
+            height: 48,
+            borderRadius: 12,
+            background: "linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)",
+            color: "#FFFFFF",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 20,
+            fontWeight: 800,
+            marginBottom: 12,
+            boxShadow: "0 4px 12px rgba(37, 99, 235, 0.3)"
+          }}>
             PB
           </div>
-          <Title level={3} style={{ margin: "0 0 4px", fontWeight: 800, letterSpacing: "-0.02em", color: "var(--color-text-primary)" }}>
+          <Title level={3} style={{ margin: 0, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--color-text-primary)" }}>
             Payment Bridge
           </Title>
           <Text type="secondary" style={{ fontSize: 13.5 }}>
-            Fintech Gateway Core & Multi-Tenant Inbound Hub
+            Automated Inbound Mutasi & Payment Dispatcher
           </Text>
         </div>
 
         {/* Auth Card */}
-        <Card 
-          className="card-elevated" 
-          style={{ 
-            borderRadius: 16, 
-            boxShadow: isDarkMode ? "0 8px 32px rgba(0,0,0,0.5)" : "0 8px 30px rgba(15,23,42,0.08)",
-            border: isDarkMode ? "1px solid #1F2937" : "1px solid #E2E8F0"
-          }}
-          bodyStyle={{ padding: "28px 32px" }}
-        >
-          {errorMsg && (
-            <Alert 
-              type="error" 
-              message={errorMsg} 
-              showIcon 
-              closable 
-              onClose={() => setErrorMsg("")}
-              style={{ marginBottom: 20, borderRadius: 8 }}
-            />
-          )}
-
+        <Card className="card-elevated" style={{ borderRadius: 16 }}>
           <Tabs
             activeKey={activeTab}
-            onChange={(k) => { setActiveTab(k); setErrorMsg(""); }}
+            onChange={setActiveTab}
             centered
             items={[
               {
                 key: "login",
-                label: "Masuk ke Akun",
+                label: "Masuk Merchant",
                 children: (
                   <Form
                     form={loginForm}
                     layout="vertical"
                     onFinish={handleLogin}
+                    initialValues={{ username: "admin", password: "admin123" }}
                     requiredMark={false}
-                    initialValues={{ username: "", password: "" }}
                   >
                     <Form.Item
-                      label={<span style={{ fontWeight: 600, fontSize: 13 }}>Username / Email</span>}
+                      label={<span style={{ fontWeight: 600, fontSize: 13 }}>Username</span>}
                       name="username"
-                      rules={[{ required: true, message: "Silakan masukkan username atau email" }]}
+                      rules={[{ required: true, message: "Silakan masukkan username" }]}
                     >
                       <Input 
                         prefix={<UserOutlined style={{ color: "#94A3B8", marginRight: 6 }} />}
-                        placeholder="admin atau email Anda"
+                        placeholder="admin / username Anda"
                         size="large"
                         style={{ borderRadius: 8 }}
                         autoComplete="username"
@@ -227,7 +166,7 @@ export default function LoginPortal({ onLoginSuccess, isDarkMode, onToggleTheme 
                       <div style={{ fontSize: 12, fontWeight: 600, color: isDarkMode ? '#94A3B8' : '#64748B', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                         <KeyOutlined style={{ color: '#2563EB' }} /> Akun Demo Siap Pakai (1-Klik Isi):
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
                         <div 
                           onClick={() => loginForm.setFieldsValue({ username: 'admin', password: 'admin123' })}
                           style={{ 

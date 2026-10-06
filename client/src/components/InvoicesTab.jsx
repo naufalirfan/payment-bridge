@@ -46,7 +46,7 @@ export default function InvoicesTab({ invoices, loading, onRefresh, onOpenCreate
       title: "Invoice ID / Channel",
       dataIndex: "id",
       key: "id",
-      width: 220,
+      width: 200,
       render: (id, record) => (
         <Space direction="vertical" size={2}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -77,6 +77,7 @@ export default function InvoicesTab({ invoices, loading, onRefresh, onOpenCreate
       title: "Pelanggan",
       dataIndex: "customer_name",
       key: "customer_name",
+      width: 170,
       render: (name, record) => (
         <Space direction="vertical" size={1}>
           <Text strong style={{ color: "var(--color-text-primary)", fontSize: 13.5 }}>{name || "Walk-in Customer"}</Text>
@@ -91,7 +92,7 @@ export default function InvoicesTab({ invoices, loading, onRefresh, onOpenCreate
       dataIndex: "base_amount",
       key: "base_amount",
       align: "right",
-      width: 140,
+      width: 130,
       render: (val) => (
         <span className="tabular-num" style={{ color: "#475569" }}>
           Rp {Number(val).toLocaleString("id-ID")}
@@ -103,10 +104,10 @@ export default function InvoicesTab({ invoices, loading, onRefresh, onOpenCreate
       dataIndex: "unique_code",
       key: "unique_code",
       align: "center",
-      width: 100,
+      width: 95,
       render: (val, record) => {
         if (record.payment_method === "DOKU_CHECKOUT") {
-          return <span style={{ color: "#CBD5E1" }}>—</span>;
+          return <span style={{ color: "#CBD5E1" }}>-</span>;
         }
         return <Tag color="cyan" className="mono-code" style={{ margin: 0 }}>+{val}</Tag>;
       }
@@ -116,9 +117,9 @@ export default function InvoicesTab({ invoices, loading, onRefresh, onOpenCreate
       dataIndex: "total_amount",
       key: "total_amount",
       align: "right",
-      width: 150,
+      width: 140,
       render: (val) => (
-        <span className="tabular-num" style={{ fontWeight: 700, color: "var(--color-text-primary)", fontSize: 14 }}>
+        <span className="tabular-num" style={{ fontWeight: 700, color: "var(--color-text-primary)", fontSize: 13.5 }}>
           Rp {Number(val).toLocaleString("id-ID")}
         </span>
       )
@@ -128,7 +129,7 @@ export default function InvoicesTab({ invoices, loading, onRefresh, onOpenCreate
       dataIndex: "status",
       key: "status",
       align: "center",
-      width: 120,
+      width: 110,
       render: (status) => {
         if (status === "PAID") {
           return <Tag icon={<CheckCircleFilled />} color="success">PAID</Tag>;
@@ -140,9 +141,9 @@ export default function InvoicesTab({ invoices, loading, onRefresh, onOpenCreate
       }
     },
     {
-      title: "Payment Link / Dibuat",
+      title: "Payment Link / Waktu",
       key: "action",
-      width: 180,
+      width: 170,
       render: (_, record) => (
         <Space direction="vertical" size={2}>
           {record.payment_url && record.status === "PENDING" && (
@@ -153,12 +154,12 @@ export default function InvoicesTab({ invoices, loading, onRefresh, onOpenCreate
               icon={<LinkOutlined />}
               href={record.payment_url}
               target="_blank"
-              style={{ fontSize: 12, height: 26, borderColor: "#E11D48", color: "#E11D48" }}
+              style={{ fontSize: 11.5, height: 26, borderColor: "#E11D48", color: "#E11D48" }}
             >
               Bayar DOKU
             </Button>
           )}
-          <span className="mono-code" style={{ fontSize: 11.5, color: "#64748B" }}>
+          <span className="mono-code" style={{ fontSize: 11, color: "#64748B" }}>
             {new Date(record.created_at).toLocaleString("id-ID")}
           </span>
         </Space>
@@ -168,14 +169,14 @@ export default function InvoicesTab({ invoices, loading, onRefresh, onOpenCreate
 
   return (
     <Card className="card-elevated">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 14 }}>
-        <Space wrap size={10}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, width: "100%", maxWidth: 760 }}>
           <Input 
             prefix={<SearchOutlined style={{ color: "#94A3B8" }} />} 
-            placeholder="Cari invoice, customer, nominal..." 
+            placeholder="Cari invoice, customer..." 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 260 }}
+            style={{ flex: 1, minWidth: 160 }}
             allowClear
           />
           <Segmented
@@ -192,12 +193,12 @@ export default function InvoicesTab({ invoices, loading, onRefresh, onOpenCreate
             Refresh
           </Button>
           <Button icon={<DownloadOutlined />} onClick={handleExportCSV}>
-            Export CSV
+            CSV
           </Button>
-        </Space>
+        </div>
 
         <Button type="primary" icon={<PlusOutlined />} onClick={onOpenCreateModal}>
-          Buat Invoice Baru
+          Buat Invoice
         </Button>
       </div>
 
@@ -206,7 +207,8 @@ export default function InvoicesTab({ invoices, loading, onRefresh, onOpenCreate
         columns={columns}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10, showSizeChanger: true }}
+        scroll={{ x: 800 }}
+        pagination={{ pageSize: 10, showSizeChanger: true, responsive: true }}
         locale={{
           emptyText: (
             <Empty 
@@ -223,4 +225,3 @@ export default function InvoicesTab({ invoices, loading, onRefresh, onOpenCreate
     </Card>
   );
 }
-

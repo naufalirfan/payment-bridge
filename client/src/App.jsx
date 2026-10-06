@@ -20,19 +20,20 @@ import {
   TransactionOutlined, 
   FileTextOutlined, 
   MobileOutlined, 
-  ApiOutlined,
-  CreditCardOutlined,
-  ThunderboltOutlined,
-  PlusOutlined,
-  MenuOutlined,
+  ApiOutlined, 
+  CreditCardOutlined, 
+  ThunderboltOutlined, 
+  PlusOutlined, 
+  MenuOutlined, 
   SunOutlined, 
-  MoonOutlined,
-  UserOutlined,
-  LogoutOutlined,
-  KeyOutlined,
-  CloudServerOutlined,
-  CrownOutlined,
-  CodeOutlined
+  MoonOutlined, 
+  UserOutlined, 
+  LogoutOutlined, 
+  KeyOutlined, 
+  CloudServerOutlined, 
+  CrownOutlined, 
+  CodeOutlined,
+  AppstoreOutlined
 } from "@ant-design/icons";
 
 import DashboardTab from "./components/DashboardTab";
@@ -240,6 +241,20 @@ export default function App() {
     }
   ];
 
+  const getPageTitle = () => {
+    switch (selectedKey) {
+      case "dashboard": return "Dashboard";
+      case "mutations": return "Mutasi Real-time";
+      case "invoices": return "Invoices";
+      case "devices": return "Device Android";
+      case "api-docs": return "API & Integrasi";
+      case "subscription": return "Paket Langganan";
+      case "doku": return "DOKU Gateway";
+      case "webhooks": return "Webhook Logs";
+      default: return "Payment Bridge";
+    }
+  };
+
   const renderContent = () => {
     switch (selectedKey) {
       case "dashboard":
@@ -258,8 +273,8 @@ export default function App() {
             mutations={mutations}
             loading={loading}
             onRefresh={fetchAllData}
-            onOpenRawDrawer={(mut) => setRawDrawerMutation(mut)}
-            onOpenManualMatch={(mut) => setManualMatchMutation(mut)}
+            onOpenRawDrawer={(item) => setRawDrawerMutation(item)}
+            onOpenManualMatch={(item) => setManualMatchMutation(item)}
             onOpenSimulator={() => setSimulatorOpen(true)}
           />
         );
@@ -281,18 +296,17 @@ export default function App() {
         );
       case "api-docs":
         return (
-          <ApiDocsTab 
-            token={token} 
-            user={user} 
-            onRefreshProfile={refreshProfile} 
+          <ApiDocsTab
+            token={token}
+            onRefreshProfile={refreshProfile}
           />
         );
       case "subscription":
         return (
-          <SubscriptionTab 
-            user={user} 
-            token={token} 
-            onRefreshProfile={refreshProfile} 
+          <SubscriptionTab
+            user={user}
+            token={token}
+            onRefreshProfile={refreshProfile}
           />
         );
       case "doku":
@@ -300,81 +314,56 @@ export default function App() {
       case "webhooks":
         return <WebhookSettingsTab />;
       default:
-        return null;
+        return <div>Tab tidak ditemukan</div>;
     }
   };
 
-  const customTheme = {
-    algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
-    token: {
-      colorPrimary: "#2563EB",
-      colorInfo: "#2563EB",
-      colorSuccess: "#10B981",
-      colorWarning: "#F59E0B",
-      colorError: "#EF4444",
-      colorTextBase: isDarkMode ? "#F9FAFB" : "#0F172A",
-      fontFamily: "Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif",
-      borderRadius: 8,
-      colorBgContainer: isDarkMode ? "#111827" : "#FFFFFF",
-      colorBgElevated: isDarkMode ? "#1F2937" : "#FFFFFF",
-      colorBgLayout: isDarkMode ? "#0B0F19" : "#F8FAFC",
-      colorBorder: isDarkMode ? "#1F2937" : "#E2E8F0",
-      colorBorderSecondary: isDarkMode ? "#374151" : "#F1F5F9",
-      fontSize: 14
-    },
-    components: {
-      Menu: {
-        itemBorderRadius: 8,
-        itemMarginInline: 8,
-        itemSelectedBg: isDarkMode ? "#1E3A8A" : "#EFF6FF",
-        itemSelectedColor: isDarkMode ? "#93C5FD" : "#2563EB"
-      },
-      Button: {
-        borderRadius: 8,
-        controlHeight: 38,
-        fontWeight: 600
-      },
-      Table: {
-        headerBg: isDarkMode ? "#1F2937" : "#F8FAFC",
-        headerBorderRadius: 8
-      },
-      Card: {
-        borderRadiusLG: 12
-      }
-    }
-  };
-
+  // If not logged in, show sleek login / register portal
   if (!user || !token) {
     return (
-      <ConfigProvider theme={customTheme}>
-        <LoginPortal 
-          onLoginSuccess={handleLoginSuccess}
-          isDarkMode={isDarkMode}
-          onToggleTheme={() => setIsDarkMode(!isDarkMode)}
-        />
+      <ConfigProvider
+        theme={{
+          algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+          token: {
+            colorPrimary: "#2563EB",
+            fontFamily: "var(--font-sans)",
+            borderRadius: 8
+          }
+        }}
+      >
+        <LoginPortal onLoginSuccess={handleLoginSuccess} isDarkMode={isDarkMode} />
       </ConfigProvider>
     );
   }
 
   return (
-    <ConfigProvider theme={customTheme}>
+    <ConfigProvider
+      theme={{
+        algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        token: {
+          colorPrimary: "#2563EB",
+          fontFamily: "var(--font-sans)",
+          borderRadius: 8
+        }
+      }}
+    >
       <Layout style={{ minHeight: "100vh", background: "var(--color-bg)" }}>
-        {/* Desktop Sider */}
+        {/* Desktop Sidebar Sider */}
         <Sider
-          breakpoint="lg"
-          collapsedWidth="0"
           width={256}
           className="app-sider"
           style={{
+            overflow: "auto",
+            height: "100vh",
             position: "fixed",
             left: 0,
             top: 0,
             bottom: 0,
-            zIndex: 10,
-            boxShadow: isDarkMode ? "1px 0 3px rgba(0, 0, 0, 0.4)" : "1px 0 2px rgba(15, 23, 42, 0.03)"
+            zIndex: 100
           }}
         >
-          <div style={{ height: 64, display: "flex", alignItems: "center", padding: "0 20px", borderBottom: `1px solid ${isDarkMode ? '#1F2937' : '#F1F5F9'}` }}>
+          {/* Logo & Platform Info */}
+          <div style={{ padding: "20px 24px", borderBottom: `1px solid ${isDarkMode ? '#1F2937' : '#E2E8F0'}` }}>
             <div className="app-logo">
               <div className="app-logo-badge">PB</div>
               <div>
@@ -408,13 +397,35 @@ export default function App() {
 
         {/* Mobile Navigation Drawer */}
         <Drawer
-          title="Payment Bridge"
+          title={
+            <div className="app-logo">
+              <div className="app-logo-badge" style={{ width: 28, height: 28, fontSize: 12 }}>PB</div>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>Payment Bridge</span>
+            </div>
+          }
           placement="left"
           open={mobileDrawerOpen}
           onClose={() => setMobileDrawerOpen(false)}
-          width={260}
+          width={280}
           styles={{ body: { padding: 0 } }}
         >
+          {/* User Info Header in Drawer */}
+          <div style={{ padding: "16px 16px 12px 16px", background: isDarkMode ? "#1F2937" : "#F8FAFC", borderBottom: `1px solid ${isDarkMode ? '#374151' : '#E2E8F0'}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Avatar size={36} style={{ backgroundColor: "#2563EB", fontWeight: 700 }}>
+                {user?.username ? user.username[0].toUpperCase() : "M"}
+              </Avatar>
+              <div style={{ overflow: "hidden" }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {user?.name || user?.username || "Merchant"}
+                </div>
+                <Tag color="blue" style={{ fontSize: 10, padding: "0 6px", marginTop: 2 }}>
+                  {user?.plan || "STARTER"}
+                </Tag>
+              </div>
+            </div>
+          </div>
+
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
@@ -423,14 +434,28 @@ export default function App() {
               setSelectedKey(key);
               setMobileDrawerOpen(false);
             }}
-            style={{ borderRight: 0, padding: "12px 4px" }}
+            style={{ borderRight: 0, padding: "8px 4px" }}
           />
+
+          <div style={{ padding: "16px", marginTop: "auto" }}>
+            <Button 
+              danger 
+              block 
+              icon={<LogoutOutlined />} 
+              onClick={() => {
+                setMobileDrawerOpen(false);
+                handleLogout();
+              }}
+            >
+              Keluar Akun
+            </Button>
+          </div>
         </Drawer>
 
         {/* Main Content Layout */}
         <Layout className="site-layout" style={{ marginLeft: 256, transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)", background: "var(--color-bg)" }}>
           <Header className="app-header">
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
               <Button
                 type="text"
                 icon={<MenuOutlined />}
@@ -438,18 +463,12 @@ export default function App() {
                 onClick={() => setMobileDrawerOpen(true)}
                 style={{ display: "none" }}
               />
-              <Text strong style={{ fontSize: 16, color: "var(--color-text-primary)", letterSpacing: "-0.01em" }}>
-                {selectedKey === "dashboard" ? "Dashboard" :
-                 selectedKey === "mutations" ? "Mutasi Real-time" :
-                 selectedKey === "invoices" ? "Invoices" :
-                 selectedKey === "devices" ? "Device Android" :
-                 selectedKey === "api-docs" ? "API & Integrasi Toko" :
-                 selectedKey === "subscription" ? "Paket Langganan" :
-                 selectedKey === "doku" ? "DOKU Gateway" : "Webhook Logs"}
+              <Text strong className="page-title-text" style={{ fontSize: 16, color: "var(--color-text-primary)", letterSpacing: "-0.01em" }}>
+                {getPageTitle()}
               </Text>
             </div>
 
-            <Space size={12}>
+            <Space size={8} className="header-actions-space" style={{ flexShrink: 0 }}>
               {/* Dark Mode Toggle */}
               <Tooltip title={isDarkMode ? "Ganti ke Mode Terang" : "Ganti ke Mode Malam"}>
                 <Button 
@@ -469,6 +488,7 @@ export default function App() {
               {/* Active Device Indicator */}
               <Tooltip title={activeDeviceCount > 0 ? activeDeviceCount + " Smartphone Android aktif terhubung" : "Tidak ada smartphone Android yang mengirim heartbeat (< 5 mnt)"}>
                 <div 
+                  className="device-status-badge"
                   onClick={() => setSelectedKey("devices")}
                   style={{ 
                     display: "flex", 
@@ -480,9 +500,9 @@ export default function App() {
                       ? (activeDeviceCount > 0 ? "#059669" : "#D97706")
                       : (activeDeviceCount > 0 ? "#A7F3D0" : "#FDE68A")),
                     borderRadius: 20, 
-                    padding: "4px 12px", 
+                    padding: "4px 10px", 
                     cursor: "pointer",
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: 600,
                     color: isDarkMode
                       ? (activeDeviceCount > 0 ? "#34D399" : "#FBBF24")
@@ -490,32 +510,41 @@ export default function App() {
                   }}
                 >
                   <span className={"pulse-indicator " + (activeDeviceCount > 0 ? "" : "offline")} />
-                  {activeDeviceCount > 0 ? activeDeviceCount + " Android Online" : "Android Idle"}
+                  <span className="device-status-badge-text">
+                    {activeDeviceCount > 0 ? activeDeviceCount + " Online" : "Idle"}
+                  </span>
                 </div>
               </Tooltip>
 
-              <Button 
-                icon={<ThunderboltOutlined style={{ color: "#2563EB" }} />}
-                onClick={() => setSimulatorOpen(true)}
-                style={{ borderColor: isDarkMode ? "#374151" : "#CBD5E1" }}
-              >
-                Simulator Inbound
-              </Button>
-              <Button 
-                type="primary" 
-                icon={<PlusOutlined />}
-                onClick={() => setCreateInvoiceOpen(true)}
-              >
-                Buat Invoice
-              </Button>
+              {/* Simulator Inbound Button */}
+              <Tooltip title="Simulator Inbound">
+                <Button 
+                  icon={<ThunderboltOutlined style={{ color: "#2563EB" }} />}
+                  onClick={() => setSimulatorOpen(true)}
+                  style={{ borderColor: isDarkMode ? "#374151" : "#CBD5E1" }}
+                >
+                  <span className="desktop-only-btn-text">Simulator</span>
+                </Button>
+              </Tooltip>
+
+              {/* Create Invoice Button */}
+              <Tooltip title="Buat Invoice Baru">
+                <Button 
+                  type="primary" 
+                  icon={<PlusOutlined />}
+                  onClick={() => setCreateInvoiceOpen(true)}
+                >
+                  <span className="desktop-only-btn-text">Buat Invoice</span>
+                </Button>
+              </Tooltip>
 
               {/* User Profile Dropdown */}
               <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" arrow>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 8px", borderRadius: 8, border: `1px solid ${isDarkMode ? '#374151' : '#E2E8F0'}` }}>
-                  <Avatar size={28} style={{ backgroundColor: "#2563EB", fontWeight: 700 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", padding: "4px 6px", borderRadius: 8, border: `1px solid ${isDarkMode ? '#374151' : '#E2E8F0'}` }}>
+                  <Avatar size={26} style={{ backgroundColor: "#2563EB", fontWeight: 700, fontSize: 12 }}>
                     {user?.username ? user.username[0].toUpperCase() : "M"}
                   </Avatar>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                  <span className="desktop-only-btn-text" style={{ fontSize: 12.5, fontWeight: 600, color: "var(--color-text-primary)" }}>
                     {user?.name || user?.username || "Merchant"}
                   </span>
                 </div>
@@ -523,11 +552,61 @@ export default function App() {
             </Space>
           </Header>
 
-          <Content style={{ padding: "28px", minHeight: "calc(100vh - 64px)" }}>
-            <div style={{ maxWidth: 1360, margin: "0 auto" }}>
+          <Content className="app-content">
+            <div style={{ maxWidth: 1360, margin: "0 auto", width: "100%" }}>
               {renderContent()}
             </div>
           </Content>
+
+          {/* Native-style Mobile Bottom Navigation */}
+          <div className="mobile-bottom-nav">
+            <button 
+              type="button" 
+              className={`mobile-nav-item ${selectedKey === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setSelectedKey('dashboard')}
+            >
+              <DashboardOutlined className="nav-icon" />
+              <span>Dashboard</span>
+            </button>
+
+            <button 
+              type="button" 
+              className={`mobile-nav-item ${selectedKey === 'mutations' ? 'active' : ''}`}
+              onClick={() => setSelectedKey('mutations')}
+            >
+              <Badge count={mutations.length} size="small" offset={[4, -2]}>
+                <TransactionOutlined className="nav-icon" />
+              </Badge>
+              <span>Mutasi</span>
+            </button>
+
+            <button 
+              type="button" 
+              className={`mobile-nav-item ${selectedKey === 'invoices' ? 'active' : ''}`}
+              onClick={() => setSelectedKey('invoices')}
+            >
+              <FileTextOutlined className="nav-icon" />
+              <span>Invoices</span>
+            </button>
+
+            <button 
+              type="button" 
+              className={`mobile-nav-item ${selectedKey === 'devices' ? 'active' : ''}`}
+              onClick={() => setSelectedKey('devices')}
+            >
+              <MobileOutlined className="nav-icon" />
+              <span>Device</span>
+            </button>
+
+            <button 
+              type="button" 
+              className="mobile-nav-item"
+              onClick={() => setMobileDrawerOpen(true)}
+            >
+              <AppstoreOutlined className="nav-icon" />
+              <span>Menu</span>
+            </button>
+          </div>
         </Layout>
       </Layout>
 

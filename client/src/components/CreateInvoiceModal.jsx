@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Modal, Form, Input, InputNumber, Button, message, Space, Typography, Alert, Radio, Card } from 'antd';
-import { PlusCircleOutlined, MobileOutlined, CreditCardOutlined, LinkOutlined } from '@ant-design/icons';
+import { Modal, Form, Input, InputNumber, Button, Radio, Alert, Space, Typography, Card, message } from 'antd';
+import { PlusCircleOutlined, LinkOutlined, MobileOutlined, CreditCardOutlined } from '@ant-design/icons';
 
 const { Text, Paragraph } = Typography;
 
@@ -65,6 +65,7 @@ export default function CreateInvoiceModal({ open, onClose, onCreated }) {
       onCancel={handleModalClose}
       footer={null}
       width={560}
+      style={{ maxWidth: '95vw' }}
     >
       {createdInvoice ? (
         <Space direction="vertical" style={{ width: '100%' }} size={16}>
@@ -121,7 +122,7 @@ export default function CreateInvoiceModal({ open, onClose, onCreated }) {
             <Radio.Group 
               value={gateway} 
               onChange={(e) => setGateway(e.target.value)} 
-              style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}
+              style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}
             >
               <Radio.Button value="MANUAL" style={{ height: 'auto', padding: '10px 12px' }}>
                 <Space direction="vertical" size={2}>

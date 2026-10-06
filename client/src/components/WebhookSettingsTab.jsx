@@ -5,26 +5,29 @@ import {
   Col, 
   Form, 
   Input, 
-  Select, 
   Button, 
-  Typography, 
   Table, 
   Tag, 
   Space, 
+  Typography, 
+  Select, 
+  Switch, 
   message, 
-  Switch,
+  Tooltip, 
+  Badge,
   Modal,
-  Tabs,
-  Tooltip
+  Tabs
 } from 'antd';
 import { 
   ApiOutlined, 
   SaveOutlined, 
   SendOutlined, 
-  ReloadOutlined,
+  ReloadOutlined, 
+  CheckCircleFilled, 
+  CloseCircleFilled,
   CodeOutlined,
-  SafetyCertificateOutlined,
-  RedoOutlined
+  CopyOutlined,
+  SafetyCertificateOutlined
 } from '@ant-design/icons';
 
 const { Title, Text, Paragraph } = Typography;
@@ -32,20 +35,12 @@ const { Option } = Select;
 
 export default function WebhookSettingsTab() {
   const [form] = Form.useForm();
-  const [loadingConfig, setLoadingConfig] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
-  
-  // Test Dispatcher State
-  const [testUrl, setTestUrl] = useState('');
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null);
-
-  // Webhook Logs State
   const [logs, setLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
-  const [retryingLogId, setRetryingLogId] = useState(null);
-
-  // Docs Modal
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [testUrl, setTestUrl] = useState('https://webhook.site/demo-payment-bridge');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
   const [docsModalOpen, setDocsModalOpen] = useState(false);
 
   useEffect(() => {
@@ -54,31 +49,27 @@ export default function WebhookSettingsTab() {
   }, []);
 
   const fetchConfig = async () => {
-    setLoadingConfig(true);
     try {
-      const res = await fetch('/api/v1/webhooks/config');
+      const res = await fetch('/api/v1/webhook/config');
       const json = await res.json();
       if (json.success) {
         form.setFieldsValue(json.data);
-        setTestUrl(json.data.webhookUrl || '');
       }
     } catch (err) {
-      message.error('Gagal memuat konfigurasi webhook: ' + err.message);
-    } finally {
-      setLoadingConfig(false);
+      console.error('Failed to load webhook config:', err);
     }
   };
 
   const fetchLogs = async () => {
     setLoadingLogs(true);
     try {
-      const res = await fetch('/api/v1/webhooks/logs');
+      const res = await fetch('/api/v1/webhook/logs');
       const json = await res.json();
       if (json.success) {
         setLogs(json.data);
       }
     } catch (err) {
-      message.error('Gagal memuat log webhook: ' + err.message);
+      console.error('Failed to load webhook logs:', err);
     } finally {
       setLoadingLogs(false);
     }
@@ -87,7 +78,7 @@ export default function WebhookSettingsTab() {
   const handleSaveConfig = async (values) => {
     setSavingConfig(true);
     try {
-      const res = await fetch('/api/v1/webhooks/config', {
+      const res = await fetch('/api/v1/webhook/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values)
@@ -95,12 +86,11 @@ export default function WebhookSettingsTab() {
       const json = await res.json();
       if (json.success) {
         message.success('Konfigurasi webhook berhasil disimpan');
-        fetchConfig();
       } else {
-        message.error(json.error || 'Gagal menyimpan');
+        message.error(json.error || 'Gagal menyimpan konfigurasi');
       }
     } catch (err) {
-      message.error('Gagal menyimpan konfigurasi: ' + err.message);
+      message.error('Error: ' + err.message);
     } finally {
       setSavingConfig(false);
     }
@@ -108,188 +98,138 @@ export default function WebhookSettingsTab() {
 
   const handleTestWebhook = async () => {
     if (!testUrl) {
-      message.warning('Tentukan target webhook URL terlebih dahulu');
+      message.warning('Masukkan Target Webhook URL terlebih dahulu');
       return;
     }
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch('/api/v1/webhooks/test', {
+      const res = await fetch('/api/v1/webhook/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          test_url: testUrl,
-          secret_key: form.getFieldValue('webhookSecret')
-        })
+        body: JSON.stringify({ target_url: testUrl })
       });
       const json = await res.json();
       if (json.success) {
-        setTestResult(json);
-        message.success(`Test webhook selesai dengan HTTP ${json.status_code}`);
+        setTestResult(json.data);
+        message.success('Webhook uji coba berhasil ditembakkan!');
         fetchLogs();
       } else {
-        message.error(json.error || 'Test webhook gagal');
+        message.error(json.error || 'Pengujian webhook gagal');
       }
     } catch (err) {
-      message.error('Error pengiriman test webhook: ' + err.message);
+      message.error('Test request failed: ' + err.message);
     } finally {
       setTesting(false);
     }
   };
 
-  const handleRetryWebhook = async (logId) => {
-    setRetryingLogId(logId);
-    try {
-      const res = await fetch(`/api/v1/webhooks/logs/${logId}/retry`, {
-        method: 'POST'
-      });
-      const json = await res.json();
-      if (json.success) {
-        if (json.data.success) {
-          message.success('Webhook berhasil dikirim ulang (HTTP 200 OK)');
-        } else {
-          message.warning(`Retry webhook selesai dengan respon HTTP ${json.data.status_code}`);
-        }
-        fetchLogs();
-      } else {
-        message.error(json.error || 'Gagal retry webhook');
-      }
-    } catch (err) {
-      message.error('Gagal retry: ' + err.message);
-    } finally {
-      setRetryingLogId(null);
-    }
-  };
-
   const logColumns = [
     {
-      title: 'Waktu Eksekusi',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 160,
+      title: 'Waktu',
+      dataIndex: 'dispatched_at',
+      key: 'dispatched_at',
+      width: 150,
       render: (val) => (
-        <span className="mono-code" style={{ fontSize: 12, color: '#475569' }}>
+        <span className="mono-code" style={{ fontSize: 11.5, color: '#64748B' }}>
           {new Date(val).toLocaleString('id-ID')}
         </span>
       )
     },
     {
-      title: 'Invoice Terkait',
+      title: 'Event / Invoice ID',
       dataIndex: 'invoice_id',
       key: 'invoice_id',
       width: 170,
-      render: (id, record) => (
+      render: (id) => (
         <Space direction="vertical" size={1}>
-          <Text strong className="mono-code">{id || 'N/A'}</Text>
-          {record.total_amount && (
-            <span style={{ fontSize: 11, color: '#237804' }}>
-              Rp {Number(record.total_amount).toLocaleString('id-ID')} ({record.customer_name || 'Customer'})
-            </span>
-          )}
+          <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>invoice.paid</Tag>
+          <span className="mono-code" style={{ fontSize: 11.5, fontWeight: 600 }}>{id}</span>
         </Space>
       )
     },
     {
-      title: 'HTTP Status',
+      title: 'Target Endpoint URL',
+      dataIndex: 'target_url',
+      key: 'target_url',
+      width: 220,
+      render: (url) => (
+        <Text ellipsis={{ tooltip: url }} className="mono-code" style={{ fontSize: 11.5 }}>
+          {url}
+        </Text>
+      )
+    },
+    {
+      title: 'Status',
       dataIndex: 'status_code',
       key: 'status_code',
-      width: 120,
+      width: 110,
       align: 'center',
-      render: (code) => {
-        const is2xx = code >= 200 && code < 300;
+      render: (code, record) => {
+        const isSuccess = code >= 200 && code < 300;
         return (
-          <Tag color={is2xx ? 'success' : 'error'} style={{ fontWeight: 600 }}>
-            {code} {is2xx ? 'OK' : 'FAIL'}
+          <Tag color={isSuccess ? 'success' : 'error'} icon={isSuccess ? <CheckCircleFilled /> : <CloseCircleFilled />}>
+            {code ? `HTTP ${code}` : 'TIMEOUT'}
           </Tag>
         );
       }
     },
     {
-      title: 'Percobaan',
-      dataIndex: 'attempts',
-      key: 'attempts',
-      width: 100,
-      align: 'center',
-      render: (att) => <Tag color="blue">{att}x Attempt</Tag>
-    },
-    {
-      title: 'Respons Server Merchant',
-      dataIndex: 'response_body',
-      key: 'response_body',
-      render: (body) => (
-        <Text ellipsis={{ tooltip: body }} style={{ maxWidth: 300, display: 'block', fontSize: 12 }} className="mono-code">
-          {body || '<Empty Response>'}
-        </Text>
-      )
-    },
-    {
-      title: 'Aksi',
-      key: 'action',
-      width: 110,
-      align: 'center',
-      render: (_, record) => (
-        <Button
-          size="small"
-          icon={<RedoOutlined />}
-          loading={retryingLogId === record.id}
-          onClick={() => handleRetryWebhook(record.id)}
-        >
-          Retry
-        </Button>
-      )
+      title: 'Latency',
+      dataIndex: 'execution_time_ms',
+      key: 'execution_time_ms',
+      width: 90,
+      align: 'right',
+      render: (ms) => <span className="tabular-num" style={{ fontSize: 12 }}>{ms || 0}ms</span>
     }
   ];
 
   return (
     <Space direction="vertical" size={20} style={{ width: '100%' }}>
+      {/* Top Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <Title level={4} style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            Konfigurasi & Logs Outbound Webhook
+          </Title>
+          <Text type="secondary" style={{ fontSize: 13.5 }}>
+            Pengaturan pengiriman notifikasi real-time ke sistem merchant dengan HMAC SHA-256
+          </Text>
+        </div>
+        <Button icon={<CodeOutlined />} onClick={() => setDocsModalOpen(true)}>
+          Panduan Verifikasi Signature
+        </Button>
+      </div>
+
       <Row gutter={[20, 20]}>
-        {/* Webhook Configuration Form */}
+        {/* Outbound Webhook Engine Config */}
         <Col xs={24} lg={12}>
           <Card 
             title={
               <Space>
-                <ApiOutlined style={{ color: '#1677FF' }} />
-                <span>Pengaturan Webhook Merchant</span>
+                <ApiOutlined style={{ color: '#2563EB' }} />
+                <span>Pengaturan Dispatcher Webhook</span>
               </Space>
             } 
             className="card-elevated"
-            loading={loadingConfig}
-            extra={
-              <Button 
-                type="link" 
-                icon={<CodeOutlined />} 
-                onClick={() => setDocsModalOpen(true)}
-              >
-                Panduan Verifikasi Merchant
-              </Button>
-            }
           >
             <Form form={form} layout="vertical" onFinish={handleSaveConfig}>
-              <Form.Item
-                label="Merchant Webhook Endpoint URL"
-                name="webhookUrl"
-                rules={[{ required: true, message: 'URL webhook wajib diisi' }]}
-                extra="Sistem akan mengirim HTTP POST ke URL ini saat invoice terbayar."
+              <Form.Item 
+                label="Default Merchant Webhook URL" 
+                name="defaultWebhookUrl"
+                rules={[{ type: 'url', message: 'Masukkan URL yang valid (https://...)' }]}
+                extra="URL ini akan dipanggil otomatis saat ada mutasi transfer atau DOKU yang berhasil dicocokkan."
               >
-                <Input placeholder="https://api.merchant.com/v1/webhooks/payment" />
+                <Input placeholder="https://domain-anda.com/api/payment-callback" className="mono-code" />
               </Form.Item>
 
-              <Form.Item
-                label="HMAC SHA-256 Secret Key"
-                name="webhookSecret"
-                rules={[{ required: true, message: 'Secret key wajib diisi' }]}
-                extra="Digunakan untuk menghasilkan signature pada header X-Bridge-Signature."
-              >
-                <Input.Password placeholder="ph_sec_..." className="mono-code" />
-              </Form.Item>
-
-              <Row gutter={16}>
+              <Row gutter={12}>
                 <Col span={12}>
-                  <Form.Item label="Retry Counter (Percobaan)" name="retryAttempts">
+                  <Form.Item label="Maksimum Percobaan (Retry)" name="maxRetries">
                     <Select>
-                      <Option value="1">1x (Tanpa Retry)</Option>
-                      <Option value="3">3x (Default Rekomendasi)</Option>
-                      <Option value="5">5x (High Reliability)</Option>
+                      <Option value="1">1 Kali (No Retry)</Option>
+                      <Option value="3">3 Kali (Rekomendasi)</Option>
+                      <Option value="5">5 Kali</Option>
                     </Select>
                   </Form.Item>
                 </Col>
@@ -405,7 +345,8 @@ export default function WebhookSettingsTab() {
           columns={logColumns}
           rowKey="id"
           loading={loadingLogs}
-          pagination={{ pageSize: 8 }}
+          scroll={{ x: 650 }}
+          pagination={{ pageSize: 8, responsive: true }}
         />
       </Card>
 
@@ -516,4 +457,3 @@ def webhook_handler():
     </Space>
   );
 }
-
