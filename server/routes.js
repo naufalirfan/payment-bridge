@@ -168,171 +168,41 @@ router.post('/merchant/subscribe', authMiddleware, async (req, res) => {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
     const orderId = 'ORD-' + crypto.randomBytes(6).toString('hex');
-    await db.run(`INSERT INTO subscription_orders (id, merchant_id, plan_name, price, status, invoice_id) VALUES (?, ?, ?, ?, 'PENDING', ?)`, [orderId, req.user.id, plan, totalAmount, invoiceId]);
-
-    await db.run(`
-      INSERT INTO invoices (
-        id, merchant_id, customer_name, customer_email, base_amount, unique_code, total_amount, payment_method, payment_url, status, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [invoiceId, req.user.id, `Langganan ${targetPlan.name} (${req.user.username})`, req.user.email || 'billing@merchant.com', targetPlan.price, uniqueCode, totalAmount, 'MANUAL_TRANSFER', null, 'PENDING', expiresAt]);
-
-    const created = await db.get('SELECT * FROM invoices WHERE id = ?', [invoiceId]);
-    res.json({ success: true, data: { orderId, invoice: created, plan: targetPlan } });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// 2. External REST API for Merchants
-router.post('/gateway/invoices', apiKeyMiddleware, async (req, res) => {
-  try {
-    const { customer_name, customer_email, amount, expiry_minutes = 60, payment_method = 'MANUAL_TRANSFER' } = req.body;
-    if (!amount || isNaN(amount) || Number(amount) <= 0) {
-      return res.status(400).json({ success: false, error: 'Nominal amount harus berupa angka valid > 0' });
-    }
-
-    const merchant = req.merchant;
-    if (merchant.invoice_quota > 0 && merchant.used_quota >= merchant.invoice_quota) {
-      return res.status(403).json({ success: false, error: 'Invoice quota exceeded. Silakan upgrade paket langganan Anda.' });
-    }
-
-    const invoiceId = 'INV-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);
-    const uniqueCode = Math.floor(1 + Math.random() * 999);
-    const totalAmount = Number(amount) + uniqueCode;
-    const expiresAt = new Date(Date.now() + Number(expiry_minutes) * 60 * 1000).toISOString();
+    await db.run('INSERT INTO subscription_orders (id, merchant_id, plan_name, price, status, invoice_id) VALUES (?, ?, ?, ?, ?, ?)', [orderId, req.user.id, plan, targetPlan.price, 'PENDING', invoiceId]);
 
     let paymentUrl = null;
-    if (payment_method === 'DOKU_CHECKOUT') {
-      try {
-        const dokuSession = await createDokuCheckoutSession({
-          invoiceId,
-          amount: Number(amount),
-          customerName: customer_name || 'Customer',
-          customerEmail: customer_email || 'customer@example.com'
+    let paymentMethod = 'MANUAL_TRANSFER';
+    try {
+      const dokuConfig = await getDokuConfig();
+      if (dokuConfig.enabled && dokuConfig.clientId && dokuConfig.secretKey) {
+        const dokuRes = await createDokuCheckoutSession({
+          invoiceId: invoiceId,
+          amount: targetPlan.price,
+          customerName: req.user.username || 'Merchant',
+          customerEmail: req.user.email || 'billing@merchant.com',
+          expiryMinutes: 1440
         });
-        if (dokuSession && dokuSession.paymentUrl) paymentUrl = dokuSession.paymentUrl;
-      } catch (dokuErr) {
-        console.warn('[External Gateway] DOKU session skipped:', dokuErr.message);
+        if (dokuRes && dokuRes.paymentUrl) {
+          paymentUrl = dokuRes.paymentUrl;
+          paymentMethod = 'DOKU_CHECKOUT';
+        }
       }
+    } catch (dokuErr) {
+      console.warn('DOKU checkout creation error:', dokuErr.message);
     }
 
-    await db.run(`
-      INSERT INTO invoices (
-        id, merchant_id, customer_name, customer_email, base_amount, unique_code, total_amount, payment_method, payment_url, status, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [invoiceId, merchant.id, customer_name || 'Pelanggan Toko', customer_email || '', Number(amount), uniqueCode, totalAmount, payment_method, paymentUrl, 'PENDING', expiresAt]);
-
-    await db.run('UPDATE users SET used_quota = used_quota + 1 WHERE id = ?', [merchant.id]);
+    await db.run(
+      'INSERT INTO invoices (id, merchant_id, customer_name, customer_email, base_amount, unique_code, total_amount, payment_method, payment_url, status, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [invoiceId, req.user.id, 'Langganan ' + targetPlan.name + ' (' + req.user.username + ')', req.user.email || 'billing@merchant.com', targetPlan.price, uniqueCode, totalAmount, paymentMethod, paymentUrl, 'PENDING', expiresAt]
+    );
 
     const created = await db.get('SELECT * FROM invoices WHERE id = ?', [invoiceId]);
-    res.status(201).json({
-      success: true,
-      data: {
-        invoice_id: created.id,
-        customer_name: created.customer_name,
-        base_amount: created.base_amount,
-        unique_code: created.unique_code,
-        total_amount: created.total_amount,
-        payment_method: created.payment_method,
-        payment_url: created.payment_url,
-        status: created.status,
-        expires_at: created.expires_at,
-        created_at: created.created_at
-      }
-    });
+    res.json({ success: true, data: { orderId, invoice: created, plan: targetPlan, paymentUrl } });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// 3. Inbound Webhook Callbacks
-router.post('/callbacks/payhooks', async (req, res) => {
-  const startTime = Date.now();
-  const apiKey = req.headers['x-payhooks-key'];
-  const payload = req.body || {};
-  const config = await getWebhookConfig();
-
-  let device = null;
-  if (apiKey) {
-    device = await db.get('SELECT * FROM devices WHERE secret_key = ? OR id = ?', [apiKey, payload.device_id || apiKey]);
-  } else if (payload.device_id) {
-    device = await db.get('SELECT * FROM devices WHERE id = ?', [payload.device_id]);
-  }
-
-  if (config.strictDeviceMode && !device) {
-    return res.status(401).json({ status: 'error', message: 'Unauthorized device.' });
-  }
-
-  if (device) {
-    await db.run("UPDATE devices SET last_ping_at = datetime('now') WHERE id = ?", [device.id]);
-  } else if (payload.device_id) {
-    await db.run(`
-      INSERT INTO devices (id, name, secret_key, last_ping_at, is_active, merchant_id)
-      VALUES (?, ?, ?, datetime('now'), 1, 'usr_admin_01')
-    `, [payload.device_id, `Android (${payload.device_id})`, apiKey || 'ph_dev_' + crypto.randomBytes(16).toString('hex')]);
-  }
-
-  res.status(200).json({ status: 'ok', message: 'Payload received and queued', latency_ms: Date.now() - startTime, received_at: new Date().toISOString() });
-
-  setImmediate(async () => {
-    try {
-      const parsed = parseMutationPayload(payload);
-      await matchAndProcessMutation(device ? device.id : payload.device_id || 'PH-AND-01', payload, parsed, device?.merchant_id);
-    } catch (err) {
-      console.error('[Callback] Error processing mutation:', err);
-    }
-  });
-});
-
-router.post('/callbacks/doku', async (req, res) => {
-  try {
-    const rawBody = JSON.stringify(req.body);
-    const dokuConfig = await getDokuConfig();
-    const payload = req.body || {};
-
-    if (dokuConfig.secretKey) {
-      const isValid = verifyDokuNotificationSignature(req.headers, rawBody, dokuConfig.secretKey);
-      if (!isValid) return res.status(401).json({ status: 'INVALID_SIGNATURE' });
-    }
-
-    const order = payload.order || {};
-    const transaction = payload.transaction || {};
-    const invoiceNumber = order.invoice_number || payload.invoice_number;
-    const paidAmount = order.amount || transaction.amount || 0;
-    const channel = payload.channel?.id || payload.payment?.payment_method_type || 'DOKU';
-    const transactionStatus = (transaction.status || payload.status || '').toUpperCase();
-
-    if (transactionStatus === 'SUCCESS') {
-      const inv = await db.get('SELECT * FROM invoices WHERE id = ?', [invoiceNumber]);
-      if (inv && inv.status === 'PENDING') {
-        await db.run("UPDATE invoices SET status = 'PAID' WHERE id = ?", [invoiceNumber]);
-        const mutationId = 'MUT-DOKU-' + Date.now();
-        await db.run(`
-          INSERT INTO mutations (
-            id, device_id, merchant_id, raw_payload, amount, sender_name, matched_invoice_id, package_name, app_title, received_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-        `, [mutationId, 'DOKU-GATEWAY', inv.merchant_id || 'usr_admin_01', rawBody, paidAmount, inv.customer_name || 'DOKU Customer', invoiceNumber, 'com.doku.gateway', `DOKU (${channel})`]);
-
-        await dispatchWebhook({
-          invoice_id: invoiceNumber,
-          customer_name: inv.customer_name,
-          amount: inv.base_amount,
-          unique_code: inv.unique_code,
-          paid_amount: paidAmount,
-          source_app: `doku.${channel.toLowerCase()}`,
-          paid_at: new Date().toISOString(),
-          matched_type: 'doku_gateway',
-          merchant_id: inv.merchant_id
-        });
-      }
-    }
-    res.status(200).json({ status: 'OK' });
-  } catch (err) {
-    res.status(500).json({ status: 'ERROR', message: err.message });
-  }
-});
-
-// 4. Dashboard Stats
 router.get('/dashboard/stats', authMiddleware, async (req, res) => {
   try {
     await updateExpiredInvoices();
@@ -512,11 +382,12 @@ router.get('/doku/config', authMiddleware, async (req, res) => {
 
 router.post('/doku/config', authMiddleware, async (req, res) => {
   try {
-    const { clientId, secretKey, isProduction, dokuEnabled } = req.body;
+    const { clientId, secretKey, isProduction, dokuEnabled, enabled } = req.body;
+    const isEn = enabled !== undefined ? enabled : dokuEnabled;
     if (clientId !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['doku_client_id', clientId]);
     if (secretKey !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['doku_secret_key', secretKey]);
     if (isProduction !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['doku_is_production', isProduction ? '1' : '0']);
-    if (dokuEnabled !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['doku_enabled', dokuEnabled ? '1' : '0']);
+    if (isEn !== undefined) await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['doku_enabled', isEn ? '1' : '0']);
     res.json({ success: true, message: 'Konfigurasi DOKU berhasil disimpan' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

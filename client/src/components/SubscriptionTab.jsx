@@ -1,136 +1,136 @@
 import React, { useState } from "react";
-import { Card, Typography, Row, Col, Button, Tag, Space, Progress, Modal, message, Alert } from "antd";
+import { 
+  Card, 
+  Row, 
+  Col, 
+  Button, 
+  Typography, 
+  Tag, 
+  Space, 
+  Modal, 
+  message, 
+  Alert, 
+  Divider,
+  Tooltip
+} from "antd";
 import { 
   CheckOutlined, 
-  CrownOutlined, 
-  RocketOutlined, 
-  ThunderboltOutlined,
+  StarFilled, 
+  CrownFilled, 
+  ThunderboltOutlined, 
+  CreditCardOutlined,
+  CopyOutlined,
   QrcodeOutlined,
-  MobileOutlined,
-  SafetyCertificateOutlined,
-  StarFilled
+  ArrowRightOutlined
 } from "@ant-design/icons";
 
 const { Title, Text, Paragraph } = Typography;
 
-export default function SubscriptionTab({ user, token, onRefreshProfile }) {
-  const [loadingPlan, setLoadingPlan] = useState("");
+export default function SubscriptionTab({ user, onRefreshProfile }) {
+  const [loadingPlan, setLoadingPlan] = useState(null);
   const [checkoutInvoice, setCheckoutInvoice] = useState(null);
   const [simulating, setSimulating] = useState(false);
 
-  const planName = user?.plan || "STARTER";
-  const usedQuota = user?.used_quota || 0;
-  const totalQuota = user?.invoice_quota || 500;
-  const quotaPercent = Math.min(100, Math.round((usedQuota / totalQuota) * 100));
-
-  const handleSubscribe = async (targetPlan) => {
-    setLoadingPlan(targetPlan);
+  const handleSubscribe = async (planKey) => {
+    setLoadingPlan(planKey);
     try {
+      const token = localStorage.getItem("pb_token") || "";
       const res = await fetch("/api/v1/merchant/subscribe", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Authorization": "Bearer " + token
         },
-        body: JSON.stringify({ plan: targetPlan })
+        body: JSON.stringify({ plan: planKey })
       });
+
       const data = await res.json();
-      if (data.success && data.data?.invoice) {
-        setCheckoutInvoice(data.data.invoice);
-      } else {
-        message.error(data.error || "Gagal membuat invoice langganan");
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal membuat tagihan langganan");
+      }
+
+      setCheckoutInvoice({
+        ...data.data.invoice,
+        paymentUrl: data.data.paymentUrl || data.data.invoice?.payment_url,
+        plan: data.data.plan
+      });
+      message.success("Tagihan untuk " + (data.data.plan?.name || planKey) + " berhasil dibuat!");
+
+      // If DOKU paymentUrl exists, open immediately
+      if (data.data.paymentUrl) {
+        window.open(data.data.paymentUrl, '_blank');
       }
     } catch (err) {
-      message.error("Koneksi gagal: " + err.message);
+      message.error(err.message);
     } finally {
-      setLoadingPlan("");
+      setLoadingPlan(null);
     }
   };
 
-  const handleSimulatePayment = async (invoice) => {
-    if (!invoice) return;
+  const handleSimulatePayment = async (inv) => {
+    if (!inv) return;
     setSimulating(true);
     try {
+      const token = localStorage.getItem("pb_token") || "";
       const res = await fetch("/api/v1/simulate/notification", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Authorization": "Bearer " + token
         },
         body: JSON.stringify({
-          device_id: "PH-AND-01",
-          package_name: "com.bca",
-          title: "BCA Mobile",
-          text: `Transfer masuk Rp ${Number(invoice.total_amount).toLocaleString("id-ID")} berhasil`
+          amount: inv.total_amount,
+          sender: "PAYMENT-BRIDGE-SUBSCRIBE",
+          bank: "BCA",
+          description: "Transfer Langganan " + inv.id
         })
       });
       const data = await res.json();
-      if (data.success && data.result?.matched) {
-        message.success("Pembayaran langganan berhasil diverifikasi! Paket akun Anda telah diaktifkan.");
-        setCheckoutInvoice(null);
-        if (onRefreshProfile) onRefreshProfile();
-      } else {
-        message.success("Simulasi mutasi diproses.");
-        if (onRefreshProfile) onRefreshProfile();
-      }
+      if (!res.ok) throw new Error(data.error || "Simulasi gagal");
+
+      message.success("✅ Pembayaran berhasil diverifikasi! Akun otomatis di-upgrade.");
+      setCheckoutInvoice(null);
+      if (onRefreshProfile) onRefreshProfile();
     } catch (err) {
-      message.error("Gagal verifikasi pembayaran: " + err.message);
+      message.error(err.message);
     } finally {
       setSimulating(false);
     }
   };
 
+  const copyText = (val, label) => {
+    navigator.clipboard.writeText(val);
+    message.success(label + " disalin ke clipboard!");
+  };
+
   return (
-    <Space direction="vertical" size={28} style={{ width: "100%" }}>
-      {/* Header & Current Plan Status */}
-      <Card className="card-elevated" style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.08) 0%, rgba(30,64,175,0.02) 100%)", border: "1px solid rgba(37,99,235,0.2)" }}>
-        <Row gutter={[24, 24]} align="middle">
-          <Col xs={24} md={14}>
-            <Space align="center" size={12}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: "#2563EB", color: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
-                <CrownOutlined />
+    <Space direction="vertical" size={24} style={{ width: "100%" }}>
+      {/* Current Plan Overview */}
+      <Card className="card-elevated" style={{ background: "linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(30, 41, 59, 0) 100%)" }}>
+        <Row align="middle" justify="space-between" gutter={[16, 16]}>
+          <Col xs={24} sm={16}>
+            <Space orientation="vertical" size={4}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <CrownFilled style={{ color: "#F59E0B", fontSize: 20 }} />
+                <Title level={4} style={{ margin: 0, fontWeight: 700 }}>
+                  Paket Langganan Aktif: <span style={{ color: "#2563EB" }}>{user?.plan || "FREE"}</span>
+                </Title>
               </div>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Title level={4} style={{ margin: 0, fontWeight: 700 }}>
-                    Status Langganan Anda:
-                  </Title>
-                  <Tag color={planName === "ENTERPRISE" ? "purple" : (planName === "PRO" ? "blue" : "default")} style={{ fontSize: 13, padding: "2px 10px", fontWeight: 700 }}>
-                    {planName}
-                  </Tag>
-                </div>
-                <Text type="secondary" style={{ fontSize: 13 }}>
-                  Masa aktif: {user?.plan_expires_at ? new Date(user.plan_expires_at).toLocaleDateString("id-ID") : "Unlimited Lifetime"}
-                </Text>
-              </div>
+              <Text type="secondary">
+                Kuota Pemakaian: <strong>{user?.quota_used || 0}</strong> / {user?.quota === 999999 ? "Unlimited" : (user?.quota || 100)} Invoices per bulan
+              </Text>
             </Space>
           </Col>
-
-          <Col xs={24} md={10}>
-            <div style={{ background: "var(--color-surface)", padding: "12px 16px", borderRadius: 8, border: "1px solid var(--color-border)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 6 }}>
-                <Text strong>Pemakaian Kuota Invoice Bulan Ini:</Text>
-                <span className="tabular-num" style={{ fontWeight: 700, color: "#2563EB" }}>
-                  {usedQuota.toLocaleString("id-ID")} / {totalQuota >= 999999 ? "∞ Unlimited" : totalQuota.toLocaleString("id-ID")}
-                </span>
-              </div>
-              <Progress percent={totalQuota >= 999999 ? 10 : quotaPercent} strokeColor="#2563EB" status="active" />
-            </div>
+          <Col xs={24} sm={8} style={{ textAlign: "right" }}>
+            <Tag color={user?.plan === "ENTERPRISE" ? "purple" : user?.plan === "PRO" ? "blue" : "default"} style={{ fontSize: 13, padding: "4px 12px", borderRadius: 20 }}>
+              Status: ACTIVE
+            </Tag>
           </Col>
         </Row>
       </Card>
 
-      {/* Pricing Plans Grid */}
-      <div>
-        <Title level={4} style={{ margin: "0 0 6px 0", fontWeight: 700 }}>
-          Pilihan Paket Langganan Gateway
-        </Title>
-        <Text type="secondary" style={{ fontSize: 14 }}>
-          Pilih paket yang sesuai dengan skala volume transaksi toko atau aplikasi Anda
-        </Text>
-      </div>
-
-      <Row gutter={[24, 24]} align="stretch">
+      {/* Pricing Cards */}
+      <Row gutter={[20, 20]} align="stretch">
         {/* Starter Plan */}
         <Col xs={24} md={8}>
           <Card className="card-elevated" style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
@@ -241,9 +241,15 @@ export default function SubscriptionTab({ user, token, onRefreshProfile }) {
 
       {/* Checkout Modal */}
       <Modal
-        title="Pembayaran Tagihan Langganan"
+        title={
+          <Space>
+            <CreditCardOutlined style={{ color: "#E11D48" }} />
+            <span>Pembayaran Tagihan Langganan</span>
+          </Space>
+        }
         open={!!checkoutInvoice}
         onCancel={() => setCheckoutInvoice(null)}
+        width={560}
         footer={[
           <Button 
             key="simulate" 
@@ -253,30 +259,80 @@ export default function SubscriptionTab({ user, token, onRefreshProfile }) {
             loading={simulating}
             onClick={() => handleSimulatePayment(checkoutInvoice)}
           >
-            Simulasi Bayar Instan (Demo)
+            ⚡ Konfirmasi Instan (Demo)
           </Button>,
           <Button key="close" type="primary" onClick={() => { setCheckoutInvoice(null); if (onRefreshProfile) onRefreshProfile(); }}>
-            Saya Sudah Transfer
+            Selesai / Refresh
           </Button>
         ]}
       >
         {checkoutInvoice && (
-          <div style={{ textAlign: "center", padding: "16px 0" }}>
-            <Text type="secondary">Nomor Tagihan: <strong className="mono-code">{checkoutInvoice.id}</strong></Text>
-            <div style={{ margin: "20px 0" }}>
-              <div style={{ fontSize: 13, color: "#64748B" }}>Total yang Harus Ditransfer (Tepat Termasuk Kode Unik):</div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: "#2563EB", margin: "8px 0" }}>
-                Rp {Number(checkoutInvoice.total_amount).toLocaleString("id-ID")}
+          <div style={{ padding: "8px 0" }}>
+            <div style={{ textAlign: "center", marginBottom: 16 }}>
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                Nomor Tagihan: <strong className="mono-code">{checkoutInvoice.id}</strong>
+              </Text>
+              <div style={{ fontSize: 32, fontWeight: 800, color: "#2563EB", margin: "6px 0" }}>
+                Rp {Number(checkoutInvoice.base_amount || checkoutInvoice.total_amount).toLocaleString("id-ID")}
               </div>
-              <Tag color="warning" style={{ fontSize: 12, padding: "4px 8px" }}>
-                Kode Unik: {checkoutInvoice.unique_code}
-              </Tag>
+              <Tag color="blue">{checkoutInvoice.customer_name || 'Tagihan Langganan'}</Tag>
             </div>
+
+            {/* DOKU Online Payment Option */}
+            {checkoutInvoice.paymentUrl ? (
+              <Card 
+                style={{ 
+                  background: "linear-gradient(135deg, rgba(225, 29, 72, 0.08) 0%, rgba(37, 99, 235, 0.08) 100%)",
+                  border: "1px solid #E11D48",
+                  marginBottom: 16,
+                  borderRadius: 12
+                }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Tag color="#E11D48" style={{ fontWeight: 700 }}>DOKU GATEWAY</Tag>
+                      <Text strong>QRIS, VA Bank & E-Wallet</Text>
+                    </div>
+                    <Tag color="green">OTOMATIS AKTIF</Tag>
+                  </div>
+
+                  <Paragraph style={{ fontSize: 12, margin: 0, color: "var(--color-text-secondary)" }}>
+                    Bayar langsung menggunakan DOKU Payment Gateway resmi (BCA, Mandiri, BRI, BNI VA, QRIS All Payment, GoPay, ShopeePay, DANA, Kartu Kredit).
+                  </Paragraph>
+
+                  <Button 
+                    type="primary" 
+                    size="large" 
+                    icon={<ArrowRightOutlined />}
+                    style={{ background: "#E11D48", borderColor: "#E11D48", height: 44, fontWeight: 700 }}
+                    onClick={() => window.open(checkoutInvoice.paymentUrl, '_blank')}
+                    block
+                  >
+                    Buka Halaman Pembayaran DOKU 🚀
+                  </Button>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Text type="secondary" style={{ fontSize: 11, flex: 1, wordBreak: 'break-all' }}>
+                      URL: {checkoutInvoice.paymentUrl}
+                    </Text>
+                    <Button 
+                      size="small" 
+                      icon={<CopyOutlined />} 
+                      onClick={() => copyText(checkoutInvoice.paymentUrl, 'Link Checkout DOKU')}
+                    >
+                      Salin Link
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ) : null}
+
             <Alert 
               type="info" 
               showIcon 
-              message="Otomatis Aktif Detik Ini Juga" 
-              description="Transfer nominal di atas ke rekening BCA/Mandiri/QRIS Payment Bridge. Sistem akan mendeteksi mutasi dan langsung meng-upgrade akun Anda secara instan." 
+              message="Aktivasi Otomatis & Instan" 
+              description="Setelah pembayaran Anda selesai di DOKU atau transfer rekening, webhook DOKU akan langsung meng-upgrade kuota dan fitur akun Anda dalam hitungan detik." 
             />
           </div>
         )}

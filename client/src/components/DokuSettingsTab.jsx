@@ -38,11 +38,21 @@ export default function DokuSettingsTab() {
   const fetchDokuConfig = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/doku/config');
+      const token = localStorage.getItem('pb_token') || '';
+      const res = await fetch('/api/v1/doku/config', {
+        headers: {
+          'Authorization': 'Bearer ' + token
+        }
+      });
       const json = await res.json();
-      if (json.success) {
+      if (json.success && json.data) {
         setDokuConfig(json.data);
-        form.setFieldsValue(json.data);
+        form.setFieldsValue({
+          enabled: json.data.enabled !== false,
+          isProduction: json.data.isProduction === true,
+          clientId: json.data.clientId || '',
+          secretKey: json.data.secretKey || ''
+        });
       }
     } catch (err) {
       message.error('Gagal memuat konfigurasi DOKU: ' + err.message);
@@ -54,10 +64,17 @@ export default function DokuSettingsTab() {
   const handleSave = async (values) => {
     setSaving(true);
     try {
+      const token = localStorage.getItem('pb_token') || '';
       const res = await fetch('/api/v1/doku/config', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values)
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          ...values,
+          dokuEnabled: values.enabled
+        })
       });
       const json = await res.json();
       if (json.success) {
@@ -75,10 +92,10 @@ export default function DokuSettingsTab() {
 
   const copyToClipboard = (text, label) => {
     navigator.clipboard.writeText(text);
-    message.success(`${label} disalin ke clipboard!`);
+    message.success(label + ' disalin ke clipboard!');
   };
 
-  const callbackUrl = `${window.location.origin}/api/v1/callbacks/doku`;
+  const callbackUrl = window.location.origin + '/api/v1/callbacks/doku';
 
   return (
     <Space direction="vertical" size={20} style={{ width: '100%' }}>
@@ -120,7 +137,7 @@ export default function DokuSettingsTab() {
                 rules={[{ required: true, message: 'Client ID DOKU wajib diisi' }]}
                 extra="Dapat ditemukan di DOKU Dashboard > Integrasi / API Keys."
               >
-                <Input placeholder="Contoh: MALLID-12345678" className="mono-code" />
+                <Input placeholder="Contoh: BRN-0220-1791096945382" className="mono-code" />
               </Form.Item>
 
               <Form.Item
@@ -157,7 +174,7 @@ export default function DokuSettingsTab() {
             } 
             className="card-elevated"
           >
-            <Paragraph style={{ fontSize: 13, color: '#334155' }}>
+            <Paragraph style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
               Salin URL notifikasi di bawah ini ke <strong>DOKU Back Office / Dashboard &gt; Integrasi &gt; Webhook Notification URL</strong>:
             </Paragraph>
 
@@ -197,4 +214,3 @@ export default function DokuSettingsTab() {
     </Space>
   );
 }
-
