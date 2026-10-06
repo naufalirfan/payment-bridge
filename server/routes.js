@@ -172,8 +172,10 @@ router.post('/merchant/subscribe', authMiddleware, async (req, res) => {
 
     let paymentUrl = null;
     let paymentMethod = 'MANUAL_TRANSFER';
+    let dokuErrDetail = null;
+    let dokuConfig = {};
     try {
-      const dokuConfig = await getDokuConfig();
+      dokuConfig = await getDokuConfig();
       if (dokuConfig.enabled && dokuConfig.clientId && dokuConfig.secretKey) {
         const dokuRes = await createDokuCheckoutSession({
           invoiceId: invoiceId,
@@ -189,6 +191,7 @@ router.post('/merchant/subscribe', authMiddleware, async (req, res) => {
       }
     } catch (dokuErr) {
       console.warn('DOKU checkout creation error:', dokuErr.message);
+      dokuErrDetail = dokuErr.message || String(dokuErr);
     }
 
     await db.run(
@@ -197,7 +200,7 @@ router.post('/merchant/subscribe', authMiddleware, async (req, res) => {
     );
 
     const created = await db.get('SELECT * FROM invoices WHERE id = ?', [invoiceId]);
-    res.json({ success: true, data: { orderId, invoice: created, plan: targetPlan, paymentUrl } });
+    res.json({ success: true, data: { orderId, invoice: created, plan: targetPlan, paymentUrl, dokuError: dokuErrDetail, dokuConfigDebug: { enabled: dokuConfig.enabled, hasClientId: !!dokuConfig.clientId, hasSecretKey: !!dokuConfig.secretKey, isProduction: dokuConfig.isProduction } } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
