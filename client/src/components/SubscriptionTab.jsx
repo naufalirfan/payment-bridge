@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Card, Typography, Row, Col, Button, Tag, Space, Progress, Modal, message } from "antd";
+import { Card, Typography, Row, Col, Button, Tag, Space, Progress, Modal, message, Alert } from "antd";
 import { 
   CheckOutlined, 
   CrownOutlined, 
@@ -16,8 +16,9 @@ const { Title, Text, Paragraph } = Typography;
 export default function SubscriptionTab({ user, token, onRefreshProfile }) {
   const [loadingPlan, setLoadingPlan] = useState("");
   const [checkoutInvoice, setCheckoutInvoice] = useState(null);
+  const [simulating, setSimulating] = useState(false);
 
-  const planName = user?.plan || "PRO_TRIAL";
+  const planName = user?.plan || "STARTER";
   const usedQuota = user?.used_quota || 0;
   const totalQuota = user?.invoice_quota || 500;
   const quotaPercent = Math.min(100, Math.round((usedQuota / totalQuota) * 100));
@@ -46,6 +47,39 @@ export default function SubscriptionTab({ user, token, onRefreshProfile }) {
     }
   };
 
+  const handleSimulatePayment = async (invoice) => {
+    if (!invoice) return;
+    setSimulating(true);
+    try {
+      const res = await fetch("/api/v1/simulate/notification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          device_id: "PH-AND-01",
+          package_name: "com.bca",
+          title: "BCA Mobile",
+          text: `Transfer masuk Rp ${Number(invoice.total_amount).toLocaleString("id-ID")} berhasil`
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.result?.matched) {
+        message.success("Pembayaran langganan berhasil diverifikasi! Paket akun Anda telah diaktifkan.");
+        setCheckoutInvoice(null);
+        if (onRefreshProfile) onRefreshProfile();
+      } else {
+        message.success("Simulasi mutasi diproses.");
+        if (onRefreshProfile) onRefreshProfile();
+      }
+    } catch (err) {
+      message.error("Gagal verifikasi pembayaran: " + err.message);
+    } finally {
+      setSimulating(false);
+    }
+  };
+
   return (
     <Space direction="vertical" size={28} style={{ width: "100%" }}>
       {/* Header & Current Plan Status */}
@@ -59,35 +93,37 @@ export default function SubscriptionTab({ user, token, onRefreshProfile }) {
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <Title level={4} style={{ margin: 0, fontWeight: 700 }}>
-                    Paket Aktif: {planName.replace("_", " ")}
+                    Status Langganan Anda:
                   </Title>
-                  <Tag color={planName === "ENTERPRISE" ? "purple" : planName === "PRO" ? "blue" : "green"}>
+                  <Tag color={planName === "ENTERPRISE" ? "purple" : (planName === "PRO" ? "blue" : "default")} style={{ fontSize: 13, padding: "2px 10px", fontWeight: 700 }}>
                     {planName}
                   </Tag>
                 </div>
                 <Text type="secondary" style={{ fontSize: 13 }}>
-                  Masa aktif hingga: {user?.plan_expires_at ? new Date(user.plan_expires_at).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "Tidak terbatas"}
+                  Masa aktif: {user?.plan_expires_at ? new Date(user.plan_expires_at).toLocaleDateString("id-ID") : "Unlimited Lifetime"}
                 </Text>
               </div>
             </Space>
           </Col>
 
           <Col xs={24} md={10}>
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12.5 }}>
-                <span style={{ fontWeight: 600 }}>Penggunaan Kuota Invoice Bulan Ini:</span>
-                <span className="mono-code" style={{ fontWeight: 700 }}>{usedQuota} / {totalQuota}</span>
+            <div style={{ background: "var(--color-surface)", padding: "12px 16px", borderRadius: 8, border: "1px solid var(--color-border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 6 }}>
+                <Text strong>Pemakaian Kuota Invoice Bulan Ini:</Text>
+                <span className="tabular-num" style={{ fontWeight: 700, color: "#2563EB" }}>
+                  {usedQuota.toLocaleString("id-ID")} / {totalQuota >= 999999 ? "∞ Unlimited" : totalQuota.toLocaleString("id-ID")}
+                </span>
               </div>
-              <Progress percent={quotaPercent} strokeColor="#2563EB" status={quotaPercent >= 90 ? "exception" : "active"} />
+              <Progress percent={totalQuota >= 999999 ? 10 : quotaPercent} strokeColor="#2563EB" status="active" />
             </div>
           </Col>
         </Row>
       </Card>
 
-      {/* Pricing Tier Grid */}
-      <div style={{ textAlign: "center", marginBottom: 8 }}>
-        <Title level={3} style={{ margin: "0 0 6px", fontWeight: 800, letterSpacing: "-0.02em" }}>
-          Pilihan Paket Langganan Merchant
+      {/* Pricing Plans Grid */}
+      <div>
+        <Title level={4} style={{ margin: "0 0 6px 0", fontWeight: 700 }}>
+          Pilihan Paket Langganan Gateway
         </Title>
         <Text type="secondary" style={{ fontSize: 14 }}>
           Pilih paket yang sesuai dengan skala volume transaksi toko atau aplikasi Anda
@@ -209,6 +245,16 @@ export default function SubscriptionTab({ user, token, onRefreshProfile }) {
         open={!!checkoutInvoice}
         onCancel={() => setCheckoutInvoice(null)}
         footer={[
+          <Button 
+            key="simulate" 
+            type="primary" 
+            ghost 
+            icon={<ThunderboltOutlined />} 
+            loading={simulating}
+            onClick={() => handleSimulatePayment(checkoutInvoice)}
+          >
+            Simulasi Bayar Instan (Demo)
+          </Button>,
           <Button key="close" type="primary" onClick={() => { setCheckoutInvoice(null); if (onRefreshProfile) onRefreshProfile(); }}>
             Saya Sudah Transfer
           </Button>

@@ -139,12 +139,16 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (user && token) {
+    if (token) {
+      refreshProfile();
       fetchAllData();
-      const interval = setInterval(fetchAllData, 8000);
+      const interval = setInterval(() => {
+        fetchAllData();
+        refreshProfile();
+      }, 8000);
       return () => clearInterval(interval);
     }
-  }, [user, token]);
+  }, [token]);
 
   const activeDeviceCount = (stats?.devices || []).filter(d => 
     d.last_ping_at && (new Date().getTime() - new Date(d.last_ping_at).getTime() < 5 * 60 * 1000)

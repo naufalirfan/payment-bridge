@@ -88,6 +88,8 @@ export default function ApiDocsTab({ token, user, onRefreshProfile }) {
       const data = await res.json();
       if (data.success) {
         message.success("Webhook URL berhasil disimpan!");
+        fetchProfile();
+        if (onRefreshProfile) onRefreshProfile();
       }
     } catch (err) {
       message.error("Gagal menyimpan webhook URL: " + err.message);

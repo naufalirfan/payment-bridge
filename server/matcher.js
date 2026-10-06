@@ -42,6 +42,17 @@ export async function matchAndProcessMutation(device_id, rawPayload, parsed) {
     if (updateRes.changes > 0) {
       matchedInvoiceId = matchedInvoice.id;
 
+      // If subscription invoice, immediately activate merchant plan
+      if (matchedInvoice.id.startsWith('INV-SUB-')) {
+        db.get('SELECT * FROM subscription_orders WHERE invoice_id = ?', [matchedInvoice.id]).then(async (subOrder) => {
+          if (subOrder) {
+            const quota = subOrder.plan_name === 'ENTERPRISE' ? 999999 : (subOrder.plan_name === 'PRO' ? 5000 : 500);
+            await db.run("UPDATE subscription_orders SET status = 'ACTIVE' WHERE id = ?", [subOrder.id]);
+            await db.run("UPDATE users SET plan = ?, invoice_quota = ?, plan_expires_at = datetime('now', '+30 days') WHERE id = ?", [subOrder.plan_name, quota, subOrder.merchant_id]);
+          }
+        }).catch(err => console.error('[Matcher] Error upgrading subscription plan:', err));
+      }
+
       // Save mutation record with matched invoice
       await db.run(`
         INSERT INTO mutations (id, device_id, raw_payload, amount, sender_name, matched_invoice_id, package_name, app_title, received_at)
