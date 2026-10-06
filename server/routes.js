@@ -157,9 +157,10 @@ router.post('/merchant/subscribe', authMiddleware, async (req, res) => {
   try {
     const { plan } = req.body;
     const plans = {
-      STARTER: { name: 'Starter Plan', price: 49000, quota: 500 },
-      PRO: { name: 'Pro Plan', price: 149000, quota: 5000 },
-      ENTERPRISE: { name: 'Enterprise Plan', price: 349000, quota: 999999 }
+      PAYG: { name: 'Pay As You Go (Deposit 1000 Trx)', price: 20000, quota: 1000 },
+      STARTER: { name: 'Starter Plan', price: 20000, quota: 500 },
+      PRO: { name: 'Pro Plan', price: 20000, quota: 5000 },
+      ENTERPRISE: { name: 'Enterprise Plan', price: 50000, quota: 999999 }
     };
     const targetPlan = plans[plan] || plans.PRO;
     const invoiceId = 'INV-SUB-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(1000 + Math.random() * 9000);

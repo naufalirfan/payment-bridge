@@ -21,7 +21,10 @@ import {
   CreditCardOutlined,
   CopyOutlined,
   QrcodeOutlined,
-  ArrowRightOutlined
+  ArrowRightOutlined,
+  DollarCircleOutlined,
+  RocketOutlined,
+  SafetyCertificateOutlined
 } from "@ant-design/icons";
 
 const { Title, Text, Paragraph } = Typography;
@@ -109,11 +112,11 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
       <Card className="card-elevated" style={{ background: "linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(30, 41, 59, 0) 100%)" }}>
         <Row align="middle" justify="space-between" gutter={[16, 16]}>
           <Col xs={24} sm={16}>
-            <Space orientation="vertical" size={4}>
+            <Space direction="vertical" size={4}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <CrownFilled style={{ color: "#F59E0B", fontSize: 20 }} />
                 <Title level={4} style={{ margin: 0, fontWeight: 700 }}>
-                  Paket Langganan Aktif: <span style={{ color: "#2563EB" }}>{user?.plan || "FREE"}</span>
+                  Paket Aktif: <span style={{ color: "#2563EB" }}>{user?.plan || "FREE"}</span>
                 </Title>
               </div>
               <Text type="secondary">
@@ -122,47 +125,99 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
             </Space>
           </Col>
           <Col xs={24} sm={8} style={{ textAlign: "right" }}>
-            <Tag color={user?.plan === "ENTERPRISE" ? "purple" : user?.plan === "PRO" ? "blue" : "default"} style={{ fontSize: 13, padding: "4px 12px", borderRadius: 20 }}>
+            <Tag color={user?.plan === "ENTERPRISE" ? "purple" : user?.plan === "PRO" ? "blue" : user?.plan === "PAYG" ? "green" : "default"} style={{ fontSize: 13, padding: "4px 12px", borderRadius: 20 }}>
               Status: ACTIVE
             </Tag>
           </Col>
         </Row>
       </Card>
 
-      {/* Pricing Cards */}
-      <Row gutter={[20, 20]} align="stretch">
-        {/* Starter Plan */}
-        <Col xs={24} md={8}>
-          <Card className="card-elevated" style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+      {/* Pricing Cards (PAYG, Starter, Pro, Enterprise) */}
+      <Row gutter={[16, 16]} align="stretch">
+        {/* 1. PAYG Plan */}
+        <Col xs={24} sm={12} lg={6}>
+          <Card 
+            className="card-elevated" 
+            style={{ 
+              height: "100%", 
+              display: "flex", 
+              flexDirection: "column", 
+              justifyContent: "space-between",
+              border: "1px solid #10B981"
+            }}
+          >
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <Title level={4} style={{ margin: 0, fontWeight: 700 }}>Starter</Title>
-                <Tag color="default">Pemula</Tag>
+                <Title level={4} style={{ margin: 0, fontWeight: 700, color: "#10B981" }}>PAYG</Title>
+                <Tag color="green">Pay As You Go</Tag>
               </div>
-              <div style={{ marginBottom: 20 }}>
-                <span style={{ fontSize: 32, fontWeight: 800 }}>Rp 49.000</span>
-                <Text type="secondary"> / bulan</Text>
+              <div style={{ marginBottom: 16 }}>
+                <span style={{ fontSize: 28, fontWeight: 800, color: "#10B981" }}>Rp 20</span>
+                <Text type="secondary" style={{ fontSize: 12 }}> / transaksi</Text>
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                  Deposit Saldo <strong>Rp 20.000</strong> (1.000 Trx)
+                </div>
               </div>
-              <Paragraph type="secondary" style={{ fontSize: 13 }}>
-                Cocok untuk toko online pemula atau bisnis personal yang baru memulai otomatisasi transfer.
+              <Paragraph type="secondary" style={{ fontSize: 12 }}>
+                Tanpa biaya langganan bulanan. Saldo transaksi tidak pernah kedaluwarsa.
               </Paragraph>
-              <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 16, marginBottom: 24 }}>
-                <Space direction="vertical" size={10} style={{ width: "100%", fontSize: 13 }}>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> <strong>1 Smartphone Android</strong> Terhubung</div>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> Kuota <strong>500 Invoice / bulan</strong></div>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> Parsing Multi-Bank & QRIS</div>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> Webhook HMAC Signed Notif</div>
+              <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 14, marginBottom: 20 }}>
+                <Space direction="vertical" size={8} style={{ width: "100%", fontSize: 12 }}>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>1.000 Kuota Trx</strong> Saldo</div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> Masa Aktif <strong>Selamanya</strong></div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>2 Device Android</strong></div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> DOKU Gateway & Webhook</div>
                 </Space>
               </div>
             </div>
-            <Button block size="large" onClick={() => handleSubscribe("STARTER")} loading={loadingPlan === "STARTER"}>
-              Pilih Paket Starter
+            <Button 
+              type="default" 
+              block 
+              size="large" 
+              style={{ borderColor: "#10B981", color: "#10B981", fontWeight: 600 }}
+              onClick={() => handleSubscribe("PAYG")} 
+              loading={loadingPlan === "PAYG"}
+            >
+              Beli PAYG Rp 20rb
             </Button>
           </Card>
         </Col>
 
-        {/* Pro Plan (Featured) */}
-        <Col xs={24} md={8}>
+        {/* 2. Starter Plan */}
+        <Col xs={24} sm={12} lg={6}>
+          <Card className="card-elevated" style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <Title level={4} style={{ margin: 0, fontWeight: 700 }}>Starter</Title>
+                <Tag color="default">Hemat</Tag>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <span style={{ fontSize: 28, fontWeight: 800 }}>Rp 20.000</span>
+                <Text type="secondary" style={{ fontSize: 12 }}> / bulan</Text>
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                  Cocok untuk online shop pemula
+                </div>
+              </div>
+              <Paragraph type="secondary" style={{ fontSize: 12 }}>
+                Paket bulanan ekonomis untuk bisnis personal & toko online pemula.
+              </Paragraph>
+              <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 14, marginBottom: 20 }}>
+                <Space direction="vertical" size={8} style={{ width: "100%", fontSize: 12 }}>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>1 Smartphone Android</strong></div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> Kuota <strong>500 Invoice / bln</strong></div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> Multi-Bank & QRIS Parsing</div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> Webhook HMAC Signed</div>
+                </Space>
+              </div>
+            </div>
+            <Button block size="large" onClick={() => handleSubscribe("STARTER")} loading={loadingPlan === "STARTER"}>
+              Pilih Starter Rp 20rb
+            </Button>
+          </Card>
+        </Col>
+
+        {/* 3. Pro Plan (Featured) */}
+        <Col xs={24} sm={12} lg={6}>
           <Card 
             className="card-elevated" 
             style={{ 
@@ -175,65 +230,86 @@ export default function SubscriptionTab({ user, onRefreshProfile }) {
             }}
           >
             <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)" }}>
-              <Tag color="#2563EB" style={{ padding: "2px 12px", borderRadius: 12, fontWeight: 700 }}>
-                <StarFilled style={{ marginRight: 4 }} /> PALING POPULER
+              <Tag color="#2563EB" style={{ padding: "2px 10px", borderRadius: 12, fontWeight: 700, fontSize: 11 }}>
+                <StarFilled style={{ marginRight: 4 }} /> POPULER
               </Tag>
             </div>
 
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, marginTop: 4 }}>
                 <Title level={4} style={{ margin: 0, fontWeight: 700, color: "#2563EB" }}>Pro</Title>
-                <Tag color="blue">Tumbuh Cepat</Tag>
+                <Tag color="blue">Best Value</Tag>
               </div>
-              <div style={{ marginBottom: 20 }}>
-                <span style={{ fontSize: 32, fontWeight: 800, color: "#2563EB" }}>Rp 149.000</span>
-                <Text type="secondary"> / bulan</Text>
+              <div style={{ marginBottom: 16 }}>
+                <span style={{ fontSize: 28, fontWeight: 800, color: "#2563EB" }}>Rp 20.000</span>
+                <Text type="secondary" style={{ fontSize: 12 }}> / bulan</Text>
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                  Volume transaksi tinggi & stabil
+                </div>
               </div>
-              <Paragraph type="secondary" style={{ fontSize: 13 }}>
-                Pilihan utama toko online & platform SaaS dengan volume transaksi harian yang stabil.
+              <Paragraph type="secondary" style={{ fontSize: 12 }}>
+                Pilihan utama toko online & platform SaaS dengan traffic harian stabil.
               </Paragraph>
-              <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 16, marginBottom: 24 }}>
-                <Space direction="vertical" size={10} style={{ width: "100%", fontSize: 13 }}>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> <strong>3 Smartphone Android</strong> Terhubung</div>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> Kuota <strong>5.000 Invoice / bulan</strong></div>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> <strong>DOKU Payment Gateway</strong> Support</div>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> Ekspor Laporan Keuangan CSV</div>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> Support Prioritas WhatsApp</div>
+              <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 14, marginBottom: 20 }}>
+                <Space direction="vertical" size={8} style={{ width: "100%", fontSize: 12 }}>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>3 Smartphone Android</strong></div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> Kuota <strong>5.000 Invoice / bln</strong></div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>DOKU Gateway Live</strong></div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> Prioritas WhatsApp Support</div>
                 </Space>
               </div>
             </div>
             <Button type="primary" block size="large" onClick={() => handleSubscribe("PRO")} loading={loadingPlan === "PRO"}>
-              Upgrade ke Pro
+              Upgrade Pro Rp 20rb
             </Button>
           </Card>
         </Col>
 
-        {/* Enterprise Plan */}
-        <Col xs={24} md={8}>
-          <Card className="card-elevated" style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        {/* 4. Enterprise Plan */}
+        <Col xs={24} sm={12} lg={6}>
+          <Card 
+            className="card-elevated" 
+            style={{ 
+              height: "100%", 
+              display: "flex", 
+              flexDirection: "column", 
+              justifyContent: "space-between",
+              border: "1px solid #9333EA"
+            }}
+          >
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <Title level={4} style={{ margin: 0, fontWeight: 700 }}>Enterprise</Title>
+                <Title level={4} style={{ margin: 0, fontWeight: 700, color: "#9333EA" }}>Enterprise</Title>
                 <Tag color="purple">Unlimited</Tag>
               </div>
-              <div style={{ marginBottom: 20 }}>
-                <span style={{ fontSize: 32, fontWeight: 800 }}>Rp 349.000</span>
-                <Text type="secondary"> / bulan</Text>
+              <div style={{ marginBottom: 16 }}>
+                <span style={{ fontSize: 28, fontWeight: 800, color: "#9333EA" }}>Rp 50.000</span>
+                <Text type="secondary" style={{ fontSize: 12 }}> / bulan</Text>
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                  Skala besar & volume tanpa batas
+                </div>
               </div>
-              <Paragraph type="secondary" style={{ fontSize: 13 }}>
-                Untuk perusahaan, agensi skala besar, atau merchant dengan volume transaksi tanpa batas.
+              <Paragraph type="secondary" style={{ fontSize: 12 }}>
+                Untuk perusahaan atau agensi dengan transaksi tanpa batas & dedicated SLA.
               </Paragraph>
-              <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 16, marginBottom: 24 }}>
-                <Space direction="vertical" size={10} style={{ width: "100%", fontSize: 13 }}>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> <strong>Unlimited Device Android</strong></div>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> <strong>Unlimited Invoices</strong></div>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> High Availability Edge Routing</div>
-                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 8 }} /> Dedicated SLA & Bantuan Integrasi</div>
+              <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 14, marginBottom: 20 }}>
+                <Space direction="vertical" size={8} style={{ width: "100%", fontSize: 12 }}>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>Unlimited Android Device</strong></div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> <strong>Unlimited Invoices</strong></div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> High Availability Edge Routing</div>
+                  <div><CheckOutlined style={{ color: "#10B981", marginRight: 6 }} /> Dedicated SLA & Bantuan</div>
                 </Space>
               </div>
             </div>
-            <Button block size="large" onClick={() => handleSubscribe("ENTERPRISE")} loading={loadingPlan === "ENTERPRISE"}>
-              Pilih Enterprise
+            <Button 
+              type="primary" 
+              block 
+              size="large" 
+              style={{ background: "#9333EA", borderColor: "#9333EA" }}
+              onClick={() => handleSubscribe("ENTERPRISE")} 
+              loading={loadingPlan === "ENTERPRISE"}
+            >
+              Pilih Enterprise Rp 50rb
             </Button>
           </Card>
         </Col>
